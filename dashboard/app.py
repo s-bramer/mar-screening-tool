@@ -615,7 +615,7 @@ else:
 
         pn.pane.Markdown("### MAR Objective"),
         mar_objective,
-        obj_desc_pane,
+        # obj_desc_pane,
         pn.layout.Divider(),
 
         pn.pane.Markdown("### MAR Method"),
