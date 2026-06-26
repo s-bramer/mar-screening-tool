@@ -13,20 +13,18 @@
 
 ## Overview
 
-MAR-ST ingests multiple spatial datasets, applies a weighted **Multi-Criteria Evaluation (MCE)** framework, and produces a composite suitability map across a 1 km grid. An interactive Panel dashboard lets users adjust theme weights in real time, toggle overlay layers, and explore scores cell-by-cell.
-
-Phase 1 covers the **Severn Trent supply area** using real BGS hydrogeology data. Need-for-MAR and water-availability scores are currently dummy placeholders, flagged clearly in the UI.
+MAR-ST computes multiple spatial datasets, applies a weighted **Multi-Criteria Evaluation (MCE)** and produces a composite suitability map across a 1 km grid. Users can adjust theme weights, toggle overlay layers and explore scores cell-by-cell (on hover).
 
 ---
 
 ## Features
 
-- **1 km suitability grid** — ~18,700 cells scored across geological, demand, and water-availability themes
-- **Real BGS data** — hydrogeology (625K), bedrock & superficial geology, superficial deposit thickness (SDTM)
-- **Hard constraints** — non-productive aquifer cells and Groundwater-Dependent Terrestrial Ecosystems (GWDTEs) are excluded automatically
-- **Live weight sliders** — adjust MCE theme weights and see composite scores update instantly
-- **Overlay layers** — hydrogeology, GWMUs, surface-water catchments, rivers, and GWDTEs
-- **Hover tooltips** — per-cell breakdown of geo score, SDTM score, composite score, and constraint status
+- **1 km suitability grid** — ~18,700 cells scored across geological, demand and water-availability
+- **BGS data** — hydrogeology (625K), bedrock & superficial geology, superficial deposit thickness (SDTM)
+- **Hard constraints** — non-productive aquifer cells and GWDTEs (so far) are excluded automatically
+- **Weight sliders** — adjust MCE theme weights, composite scores update instantly
+- **Overlay layers** — hydrogeology, GWMUs, surface-water catchments, rivers, GWMs and GWDTEs
+- **Hover tooltips** — per-cell breakdown of geo score, SDTM score, composite score and constraint status
 - **Export-ready** — `processed/` outputs are standard GeoPackages consumable by QGIS or ArcGIS
 
 ---
@@ -108,7 +106,7 @@ Place source files under `data/` following the paths defined in `config.yaml`. T
 python scripts/preprocess.py
 ```
 
-This reads all raw data, applies scoring, runs the spatial join against the 1 km grid, and writes the GeoPackages to `processed/`. Expect ~2–5 minutes on first run.
+This reads all raw data, applies scoring, runs the spatial join against the 1 km grid and writes the GeoPackages to `processed/`. (takes a while..)
 
 ### 4. Launch the dashboard
 
@@ -168,8 +166,10 @@ All parameters in `config.yaml`. Key sections:
 
 ## To Do
 
-- [ ] Need-for-MAR layer (CAMS deficit data)
-- [ ] Add AHP pairwise matrix to replace flat weight sliders
+- [ ] Add Water Availability, Need-for-MAR layers (CAMS data)
+- [ ] Add DWMP data 
+- [ ] Prepare decision flow chart 
+- [ ] Add AHP pairwise weight matrix to replace flat weight sliders
 - [ ] Add click-to-query — cell click shows per-theme score breakdown (hover will become busy)
 - [ ] Source Protection Zones (SPZ1) constraint layer
 - [ ] Groundwater flooding / contaminated land constraints
@@ -185,7 +185,3 @@ pytest tests/
 ```
 
 ---
-
-## License
-
-Internal project — Severn Trent Water / [Your Organisation]. Not licensed for public redistribution.
