@@ -27,7 +27,6 @@ Phase 1 covers the **Severn Trent supply area** using real BGS hydrogeology data
 - **Live weight sliders** — adjust MCE theme weights and see composite scores update instantly
 - **Overlay layers** — hydrogeology, GWMUs, surface-water catchments, rivers, and GWDTEs
 - **Hover tooltips** — per-cell breakdown of geo score, SDTM score, composite score, and constraint status
-- **BNG grid lines** — map axes display British National Grid coordinates
 - **Export-ready** — `processed/` outputs are standard GeoPackages consumable by QGIS or ArcGIS
 
 ---
@@ -83,7 +82,7 @@ mar-screening-tool/
 ### 1. Create the conda environment
 
 ```bash
-conda env create -f env.yml   # ~5 minutes first time
+conda env create -f env.yml 
 conda activate mar-st
 ```
 
@@ -146,7 +145,7 @@ Weights are adjustable via the dashboard sidebar. All scores are normalised to *
 
 ## Configuration
 
-All parameters live in `config.yaml` — no magic constants in the code. Key sections:
+All parameters in `config.yaml`. Key sections:
 
 - **`paths`** — data and processed directory roots
 - **`data_sources`** — file paths and field names for each dataset
@@ -158,37 +157,23 @@ All parameters live in `config.yaml` — no magic constants in the code. Key sec
 
 ---
 
-## Coordinate Reference Systems
-
-| Stage | CRS |
-|-------|-----|
-| All analysis & processing | EPSG:27700 (OSGB36 British National Grid) |
-| Dashboard web map | EPSG:3857 (Web Mercator) |
-| Hover / export coordinates | EPSG:27700 |
-
-Input datasets without an explicit EPSG tag are assumed to be BNG and logged as a warning at ingest.
-
----
-
 ## Known Limitations (Phase 1)
 
 1. **Need for MAR / Water Availability** — dummy scores, flagged red in the dashboard sidebar
 2. **Dominant-polygon rule** — where multiple geology polygons overlap a 1 km cell, the largest fragment wins; area-weighted mean can be swapped in later
-3. **GWDTEs** — England-only dataset; Scottish/Welsh equivalents not yet included
-4. **MAR Objective selector** — UI control exists but is not yet wired to alternative scoring logic
-5. **AHP weights** — flat sliders used for now; pairwise comparison matrix planned for Phase 2
+3. **MAR Objective selector** — UI control exists but is not yet wired to alternative scoring logic
+4. **AHP weights** — flat sliders used for now; pairwise comparison matrix planned for Phase 2
 
 ---
 
-## Roadmap
+## To Do
 
-- [ ] Wire up real Need-for-MAR layer (CAMS deficit data)
+- [ ] Need-for-MAR layer (CAMS deficit data)
 - [ ] Add AHP pairwise matrix to replace flat weight sliders
-- [ ] Add click-to-query — cell click shows per-theme score breakdown
+- [ ] Add click-to-query — cell click shows per-theme score breakdown (hover will become busy)
 - [ ] Source Protection Zones (SPZ1) constraint layer
 - [ ] Groundwater flooding / contaminated land constraints
-- [ ] Scottish and Welsh GWDTE equivalents
-- [ ] Export selected cells as shapefile / CSV report
+- [ ] Export selected cells as shapefile / CSV report?
 
 ---
 
