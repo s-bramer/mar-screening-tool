@@ -620,11 +620,11 @@ else:
 
         pn.pane.Markdown("### MAR Method"),
         mar_method,
-        pn.pane.Markdown(
-            "Selects which geological sub-criteria are active. "
-            "Infiltration-only criteria are greyed out for deep borehole.",
-            styles={"color": "#888", "font-size": "0.80em"},
-        ),
+        # pn.pane.Markdown(
+        #     "Selects which geological sub-criteria are active. "
+        #     "Infiltration-only criteria are greyed out for deep borehole.",
+        #     styles={"color": "#888", "font-size": "0.80em"},
+        # ),
         pn.layout.Divider(),
 
         pn.pane.Markdown("### MCE Theme Weights"),
