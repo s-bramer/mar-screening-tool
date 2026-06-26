@@ -1,0 +1,38 @@
+# --- Data (large spatial files — not tracked in git) ---
+data/
+processed/
+
+# --- Python ---
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# --- Notebooks ---
+.ipynb_checkpoints/
+
+# --- Logs & temp ---
+*.log
+*.tmp
+
+# --- Claude Code (local session config — not for sharing) ---
+.claude/
+
+# --- IDE ---
+.vscode/
+.idea/
+*.swp
+
+# --- OS ---
+.DS_Store
+Thumbs.db
+
+# --- Conda / virtual envs ---
+.env
+.venv/
+env/
