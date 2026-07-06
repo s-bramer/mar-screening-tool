@@ -366,16 +366,9 @@ def _load_all() -> dict:
         color="#de1212", fill_alpha=0.40, line_alpha=0, tools=[HOVER_EXCL],
     ))
 
-    bnd    = _gpkg("boundary_3857")
-    hydro  = _gpkg("hydrogeology_3857")
-    gwmu   = _gpkg("gwmu_3857")
-    gwm    = _gpkg("gwm_3857")
-    sw     = _gpkg("sw_catchments_3857")
-    rivers = _gpkg("rivers_3857")
-
-    rivers = rivers.copy()
-    rivers.geometry = rivers.geometry.simplify(2000, preserve_topology=False)
-    rivers = rivers[~rivers.geometry.is_empty].reset_index(drop=True)
+    bnd  = _gpkg("boundary_3857")
+    gwmu = _gpkg("gwmu_3857")
+    gwm  = _gpkg("gwm_3857")
 
     def _rings(gdf: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
         g = gdf.copy()
@@ -385,8 +378,6 @@ def _load_all() -> dict:
     _s = dict(geo=False, legend=False, hover=False)
     L_BOUNDARY = _rings(bnd).hvplot(line_color="white",   line_width=2.5, **_s)
     L_GWMU     = _rings(gwmu).hvplot(line_color="#e67e00", line_width=1.5, **_s)
-    L_SW       = _rings(sw).hvplot(line_color="#2980b9",  line_width=1.2, **_s)
-    L_RIVERS   = rivers.hvplot(line_color="#5dade2", line_width=0.8, **_s)
 
     gwm_rings = _rings(gwm[["Name", "geometry"]])
     gwm_rings.geometry = gwm_rings.geometry.simplify(1000, preserve_topology=False)
@@ -395,11 +386,6 @@ def _load_all() -> dict:
         line_color="#9b59b6", line_width=2.0,
         tools=[HoverTool(tooltips=[("GW Model", "@Name")])],
         geo=False, legend=False, hover=False,
-    )
-    L_HYDRO = hydro.hvplot(
-        c="CHARACTER",
-        cmap=["#e0e0e0", "#c6dff0", "#57a0ce", "#1a6faf", "#c6dff0"],
-        alpha=0.45, line_width=0, **_s,
     )
 
     TILE_BASE = gts.CartoDark.opts(opts.WMTS(
@@ -418,9 +404,6 @@ def _load_all() -> dict:
         L_BOUNDARY=L_BOUNDARY,
         L_GWMU=L_GWMU,
         L_GWM=L_GWM,
-        L_SW=L_SW,
-        L_RIVERS=L_RIVERS,
-        L_HYDRO=L_HYDRO,
     )
 
 
@@ -433,9 +416,6 @@ try:
     L_BOUNDARY    = _d["L_BOUNDARY"]
     L_GWMU        = _d["L_GWMU"]
     L_GWM         = _d["L_GWM"]
-    L_SW          = _d["L_SW"]
-    L_RIVERS      = _d["L_RIVERS"]
-    L_HYDRO       = _d["L_HYDRO"]
     DATA_LOADED = True
 except FileNotFoundError as e:
     DATA_LOADED = False
@@ -600,11 +580,11 @@ layer_checks = pn.widgets.CheckBoxGroup(
         "Suitability Grid",
         "Excluded Cells",
         "Study Boundary",
-        "Hydrogeology (BGS)",
         "GW Mgmt Units",
         "GW Models",
-        "SW Catchments",
-        "Rivers",
+        "Hydrogeology (BGS)  — coming soon",
+        "SW Catchments  — coming soon",
+        "Rivers  — coming soon",
     ],
 )
 
@@ -753,22 +733,38 @@ else:
 
         score_col = _COL_MAP[col_by]
 
+        _SEL_LABEL = {
+            "composite_score":   "Overall Suitability",
+            "geo_composite":     "Feasibility: Hydrogeology",
+            "need_score":        "Demand: Need for MAR",
+            "geo_score":         "Feasibility: Hydrogeology (aquifer)",
+            "water_score":       "Supply: Water Availability",
+            "sdtm_score":        "Feasibility: SDTM Thickness",
+            "slope_score":       "Feasibility: Topography / Slope",
+            "depth_water_score": "Feasibility: Depth to Water",
+            "surf_geo_score":    "Feasibility: Surface Geology",
+        }
+        sel_lbl = _SEL_LABEL.get(col_by, "Selected Score")
+
+        # Sub-criteria that are NOT already in the fixed theme rows below
+        _SUBCRIT = {"geo_score", "sdtm_score", "slope_score",
+                    "depth_water_score", "surf_geo_score"}
+
         _tt = []
-        if "GW Models"     in layers: _tt += [("GW Model",  "@gwm_name")]
-        if "GW Mgmt Units" in layers: _tt += [("GWMU",      "@gwmu")]
+        if "GW Models"     in layers: _tt += [("GW Model", "@gwm_name")]
+        if "GW Mgmt Units" in layers: _tt += [("GWMU",     "@gwmu")]
         _tt += [
-            ("Aquifer",               "@aquifer"),
-            ("──────────────",        ""),
-            ("Composite",             "@composite{0.0}"),
-            ("  Geo sub-composite",   "@geo_composite{0.0}"),
-            ("  ├ Aquifer class.",     "@geo_score{0.0}"),
-            ("  ├ SDTM thickness",     "@sdtm_score{0.0}  (@sdtm_mean_m{0.0} m)"),
-            ("  ├ Topography/slope",   "@slope_score{0.0}"),
-            ("  ├ Depth to water",     "@depth_water_score{0.0}  (@depth_water_m{0.0} m)"),
-            ("  └ Surface geology",    "@surf_geo_score{0.0}"),
-            ("──────────────",        ""),
-            ("  Need (dummy)",         "@need_score{0.0}"),
-            ("  Water (dummy)",        "@water_score{0.0}"),
+            ("Aquifer",    "@aquifer"),
+            ("──────────", ""),
+        ]
+        if col_by in _SUBCRIT:
+            _tt += [(sel_lbl, f"@{score_col}{{0.0}}"), ("──────────", "")]
+        _tt += [
+            ("Demand (Need for MAR)",        "@need_score{0.0}"),
+            ("Feasibility (Hydrogeology)",   "@geo_composite{0.0}"),
+            ("Supply (Water Availability)",  "@water_score{0.0}"),
+            ("──────────",                   ""),
+            ("Overall Score",                "@composite{0.0}"),
         ]
         hover_tool = HoverTool(tooltips=_tt)
 
@@ -794,14 +790,11 @@ else:
         ))
 
         plot = TILE_BASE
-        if "Excluded Cells"     in layers: plot = plot * EXCL_RECTS
-        if "Suitability Grid"   in layers: plot = plot * rects
-        if "Hydrogeology (BGS)" in layers: plot = plot * L_HYDRO
-        if "GW Mgmt Units"      in layers: plot = plot * L_GWMU
-        if "GW Models"          in layers: plot = plot * L_GWM
-        if "SW Catchments"      in layers: plot = plot * L_SW
-        if "Rivers"             in layers: plot = plot * L_RIVERS
-        if "Study Boundary"     in layers: plot = plot * L_BOUNDARY
+        if "Excluded Cells"   in layers: plot = plot * EXCL_RECTS
+        if "Suitability Grid" in layers: plot = plot * rects
+        if "GW Mgmt Units"    in layers: plot = plot * L_GWMU
+        if "GW Models"        in layers: plot = plot * L_GWM
+        if "Study Boundary"   in layers: plot = plot * L_BOUNDARY
 
         return plot.opts(opts.Overlay(
             active_tools=["wheel_zoom", "pan"],

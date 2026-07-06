@@ -1,6 +1,15 @@
-# --- Data (large spatial files — not tracked in git) ---
+# --- Raw data (not tracked) ---
 data/
-processed/
+
+# --- Processed data: allow dashboard files, exclude inactive/large layers ---
+processed/hydrogeology.gpkg
+processed/hydrogeology_3857.gpkg
+processed/rivers.gpkg
+processed/rivers_3857.gpkg
+processed/sw_catchments.gpkg
+processed/sw_catchments_3857.gpkg
+processed/gwdte.gpkg
+processed/gwdte_3857.gpkg
 
 # --- Python ---
 __pycache__/
