@@ -1,24 +1,45 @@
-name: Sync to Hugging Face Spaces
+name: Deploy to Hugging Face Spaces
 
 on:
   push:
     branches: [main]
 
 jobs:
-  sync:
+  deploy:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
-      - name: Install HF Xet (binary file handler for HF repos)
-        run: pip install huggingface_hub hf_xet
+      - name: Install huggingface_hub
+        run: pip install huggingface_hub
 
-      - name: Push to Hugging Face Space
+      - name: Upload to HF Space via API
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          HF_USERNAME: ${{ secrets.HF_USERNAME }}
+          HF_SPACE_NAME: ${{ secrets.HF_SPACE_NAME }}
         run: |
-          git remote add hf https://${{ secrets.HF_USERNAME }}:$HF_TOKEN@huggingface.co/spaces/${{ secrets.HF_USERNAME }}/${{ secrets.HF_SPACE_NAME }}
-          git push hf main --force
+          python << 'EOF'
+          import os
+          from huggingface_hub import HfApi
+
+          api   = HfApi(token=os.environ["HF_TOKEN"])
+          repo  = f"{os.environ['HF_USERNAME']}/{os.environ['HF_SPACE_NAME']}"
+
+          api.upload_folder(
+              folder_path=".",
+              repo_id=repo,
+              repo_type="space",
+              ignore_patterns=[
+                  ".git/*",
+                  ".github/*",
+                  "__pycache__/*",
+                  "*.pyc", "*.pyo",
+                  ".env",
+                  "data/*",
+                  "*.log",
+              ],
+          )
+          print(f"Deployed → https://huggingface.co/spaces/{repo}")
+          EOF
