@@ -1,3 +1,12 @@
+---
+title: MAR Screening Tool
+emoji: 🗺️
+colorFrom: blue
+colorTo: green
+sdk: docker
+pinned: false
+---
+
 # MAR-ST — Managed Aquifer Recharge Suitability Tool
 
 > Spatial suitability screening and interactive dashboard for identifying
