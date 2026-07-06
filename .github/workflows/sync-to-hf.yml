@@ -8,11 +8,13 @@ jobs:
   sync:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout (with LFS)
+      - name: Checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          lfs: true
+
+      - name: Install HF Xet (binary file handler for HF repos)
+        run: pip install huggingface_hub hf_xet
 
       - name: Push to Hugging Face Space
         env:
