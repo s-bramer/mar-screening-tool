@@ -712,18 +712,52 @@ else:
 
     # -----------------------------------------------------------------------
     # Reactive map
+    #
+    # Range-save hook: Bokeh on_change callbacks write the current pan/zoom
+    # into _view whenever the user moves the map.  _build_map re-applies
+    # those values as xlim/ylim on the new figure so zoom is preserved.
     # -----------------------------------------------------------------------
+
+    _view = {"x_range": None, "y_range": None}
+
+    def _range_save_hook(plot, element):
+        """Attach Bokeh callbacks to persist the current viewport."""
+        fig = plot.state
+
+        def _save(attr, old, new):
+            xs, xe = fig.x_range.start, fig.x_range.end
+            ys, ye = fig.y_range.start, fig.y_range.end
+            if None not in (xs, xe, ys, ye):
+                _view["x_range"] = (xs, xe)
+                _view["y_range"] = (ys, ye)
+
+        fig.x_range.on_change("start", _save)
+        fig.x_range.on_change("end",   _save)
+        fig.y_range.on_change("start", _save)
+        fig.y_range.on_change("end",   _save)
+
+    _SEL_LABEL = {
+        "composite_score":   "Overall Suitability",
+        "geo_composite":     "Feasibility: Hydrogeology",
+        "need_score":        "Demand: Need for MAR",
+        "geo_score":         "Feasibility: Hydrogeology (aquifer)",
+        "water_score":       "Supply: Water Availability",
+        "sdtm_score":        "Feasibility: SDTM Thickness",
+        "slope_score":       "Feasibility: Topography / Slope",
+        "depth_water_score": "Feasibility: Depth to Water",
+        "surf_geo_score":    "Feasibility: Surface Geology",
+    }
+    _SUBCRIT = {"geo_score", "sdtm_score", "slope_score",
+                "depth_water_score", "surf_geo_score"}
 
     def _build_map(w_n, w_g, w_w, w_aq, w_sd, w_sl, w_dw, w_sg,
                    layers, col_by, method, objective):
         total = (w_n + w_g + w_w) or 1.0
 
         feasible = FEASIBLE_BASE.copy()
-
         feasible["geo_composite"] = _compute_geo_composite(
             feasible, method, w_aq, w_sd, w_sl, w_dw, w_sg,
         ).round(1)
-
         feasible["composite"] = np.clip(
             (w_n / total * feasible["need_score"]
              + w_g / total * feasible["geo_composite"]
@@ -732,31 +766,12 @@ else:
         ).round(1)
 
         score_col = _COL_MAP[col_by]
-
-        _SEL_LABEL = {
-            "composite_score":   "Overall Suitability",
-            "geo_composite":     "Feasibility: Hydrogeology",
-            "need_score":        "Demand: Need for MAR",
-            "geo_score":         "Feasibility: Hydrogeology (aquifer)",
-            "water_score":       "Supply: Water Availability",
-            "sdtm_score":        "Feasibility: SDTM Thickness",
-            "slope_score":       "Feasibility: Topography / Slope",
-            "depth_water_score": "Feasibility: Depth to Water",
-            "surf_geo_score":    "Feasibility: Surface Geology",
-        }
-        sel_lbl = _SEL_LABEL.get(col_by, "Selected Score")
-
-        # Sub-criteria that are NOT already in the fixed theme rows below
-        _SUBCRIT = {"geo_score", "sdtm_score", "slope_score",
-                    "depth_water_score", "surf_geo_score"}
+        sel_lbl   = _SEL_LABEL.get(col_by, "Selected Score")
 
         _tt = []
         if "GW Models"     in layers: _tt += [("GW Model", "@gwm_name")]
         if "GW Mgmt Units" in layers: _tt += [("GWMU",     "@gwmu")]
-        _tt += [
-            ("Aquifer",    "@aquifer"),
-            ("──────────", ""),
-        ]
+        _tt += [("Aquifer", "@aquifer"), ("──────────", "")]
         if col_by in _SUBCRIT:
             _tt += [(sel_lbl, f"@{score_col}{{0.0}}"), ("──────────", "")]
         _tt += [
@@ -766,7 +781,6 @@ else:
             ("──────────",                   ""),
             ("Overall Score",                "@composite{0.0}"),
         ]
-        hover_tool = HoverTool(tooltips=_tt)
 
         rects = hv.Rectangles(
             feasible,
@@ -786,7 +800,7 @@ else:
             clabel="Score (0–10)",
             line_alpha=0,
             fill_alpha=0.72,
-            tools=[hover_tool],
+            tools=[HoverTool(tooltips=_tt)],
         ))
 
         plot = TILE_BASE
@@ -796,11 +810,16 @@ else:
         if "GW Models"        in layers: plot = plot * L_GWM
         if "Study Boundary"   in layers: plot = plot * L_BOUNDARY
 
-        return plot.opts(opts.Overlay(
+        _ov_opts = dict(
             active_tools=["wheel_zoom", "pan"],
             toolbar="above",
-            hooks=[_bng_axes_hook],
-        ))
+            hooks=[_bng_axes_hook, _range_save_hook],
+        )
+        if _view["x_range"] is not None:
+            _ov_opts["xlim"] = _view["x_range"]
+            _ov_opts["ylim"] = _view["y_range"]
+
+        return plot.opts(opts.Overlay(**_ov_opts))
 
     map_pane = pn.panel(
         pn.bind(
