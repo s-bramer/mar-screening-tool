@@ -45,8 +45,7 @@ MAR-ST computes multiple spatial datasets, applies a weighted **Multi-Criteria E
 ```
 mar-screening-tool/
 ├── config.yaml                   ← all parameters, paths, weights, score maps
-├── env.yml                       ← conda environment specification
-├── ROADMAP.md                    ← build status and open tasks (live document)
+├── env.yml                       ← mar-st conda environment 
 │
 ├── src/mar_st/                   ← core library
 │   ├── config.py

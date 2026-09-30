@@ -35,8 +35,9 @@ build/
 *.log
 *.tmp
 
-# --- Claude Code (local session config — not for sharing) ---
+# --- Claude  ---
 .claude/
+.claudeignore
 CLAUDE.md
 ROADMAP.md
 
