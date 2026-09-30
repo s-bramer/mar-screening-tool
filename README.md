@@ -29,11 +29,11 @@ MAR-ST computes multiple spatial datasets, applies a weighted **Multi-Criteria E
 ## Features
 
 - **1 km suitability grid** — ~18,700 cells scored across three MCE themes; composite score updates live with weight sliders
-- **Numbered sub-criteria system** — 14 criteria across three themes (1.1–1.5, 2.1–2.5, 3.1–3.3) with per-criterion weight sliders in a collapsible sidebar
+- **Numbered sub-criteria system** — sub-criteria across three themes with weight sliders 
 - **Real BGS data** — hydrogeology classification (2.1) and SDTM deposit thickness (2.2) fully processed and scored
 - **Hard constraints** — non-productive aquifer cells and GWDTEs excluded automatically; excluded cells rendered in red
 - **MAR Decision Tree** — Sankey diagram mapping MAR Objectives → Water Sources → Recharge Methods with path highlighting
-- **Data Sources tab** — live documentation of all input datasets, scoring methodology, licence and status; driven by `data_sources.yaml` (no code change needed to update)
+- **Data Sources tab** — live documentation of all input datasets, scoring methodology, licence and status; driven by `data_sources.yaml` 
 - **Overlay layers** — GWMUs, GW model extents, study boundary; hydrogeology, catchments and rivers coming soon
 - **Hover tooltips** — per-cell breakdown of need, geo and water scores plus composite and constraint status
 - **Export-ready** — `processed/` GeoPackages consumable in QGIS or ArcGIS
