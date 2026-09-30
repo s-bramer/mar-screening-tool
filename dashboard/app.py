@@ -2,7 +2,7 @@
 MAR-ST Phase 1 Dashboard
 
 Suitability grid rendered as hv.Rectangles (Bokeh quad glyph).
-Quad glyphs are never triangulated — no QuadMesh conversion, no NaN-to-zero
+Quad glyphs are never triangulated - no QuadMesh conversion, no NaN-to-zero
 WebGL artefacts, no fan spikes.
 
 Static overlay layers are pre-built once and served from cache.
@@ -17,6 +17,7 @@ Requires:
     python scripts/preprocess.py   (populates processed/)
 """
 
+import re
 import sys
 from pathlib import Path
 
@@ -34,6 +35,7 @@ from holoviews import opts
 from bokeh.models import HoverTool, FixedTicker, CustomJSTickFormatter
 from pyproj import Transformer
 import plotly.graph_objects as go
+import yaml
 
 from mar_st import config as cfg_mod
 from mar_st.utils import get_logger
@@ -43,14 +45,6 @@ log = get_logger("dashboard")
 pn.extension("plotly", throttled=True)
 hv.extension("bokeh")
 
-pn.config.raw_css.append("""
-.card-header h3 {
-    font-size: 12px !important;
-    font-weight: 600 !important;
-    color: #1a3a5c !important;
-    margin: 0 !important;
-}
-""")
 
 # ---------------------------------------------------------------------------
 # Config
@@ -79,9 +73,16 @@ _SUB_SLIDER_SS = ["""
         color: #55687a !important;
     }
 """]
+_SUB_SLIDER_PLACEHOLDER_SS = ["""
+    .bk-slider-title {
+        font-size: 11.5px !important;
+        font-weight: 400 !important;
+        color: #c0392b !important;
+    }
+"""]
 
 # ---------------------------------------------------------------------------
-# MAR decision tree  (source: data/img/chart.csv)
+# MAR decision tree 
 # ---------------------------------------------------------------------------
 
 MAR_PATHS = {
@@ -258,7 +259,7 @@ def _build_sankey_fig(obj_val: str, water_val: str, method_val: str) -> go.Figur
 
 
 # ---------------------------------------------------------------------------
-# BNG axis tick positions — pre-computed once at startup
+# BNG axis tick positions - pre-computed once at startup
 # ---------------------------------------------------------------------------
 
 _T = Transformer.from_crs(27700, 3857, always_xy=True)
@@ -292,7 +293,7 @@ def _bng_axes_hook(plot, element):
 
 
 # ---------------------------------------------------------------------------
-# Cached startup loader — runs once per server process
+# Cached startup loader - runs once per server process
 # ---------------------------------------------------------------------------
 
 @pn.cache
@@ -307,7 +308,7 @@ def _load_all() -> dict:
             )
         return gpd.read_file(p)
 
-    log.info("Loading pre-computed assets (first connection — will be cached)...")
+    log.info("Loading pre-computed assets (first connection - will be cached)...")
 
     cells = pd.read_csv(PROCESSED / "hover_base.csv")
 
@@ -376,7 +377,7 @@ def _load_all() -> dict:
         return g[~g.geometry.is_empty].reset_index(drop=True)
 
     _s = dict(geo=False, legend=False, hover=False)
-    L_BOUNDARY = _rings(bnd).hvplot(line_color="white",   line_width=2.5, **_s)
+    L_BOUNDARY = _rings(bnd).hvplot(line_color="#1a3a5c", line_width=2.5, **_s)
     L_GWMU     = _rings(gwmu).hvplot(line_color="#e67e00", line_width=1.5, **_s)
 
     gwm_rings = _rings(gwm[["Name", "geometry"]])
@@ -388,13 +389,15 @@ def _load_all() -> dict:
         geo=False, legend=False, hover=False,
     )
 
-    TILE_BASE = gts.CartoDark.opts(opts.WMTS(
-        width=900, height=MAP_H,
-        active_tools=["wheel_zoom", "pan"],
-        toolbar="above",
-    ))
+    TILE_BASE = (gts.EsriWorldLightGrayBase * gts.EsriWorldLightGrayReference).opts(
+        opts.WMTS(
+            width=900, height=MAP_H,
+            active_tools=["wheel_zoom", "pan"],
+            toolbar="above",
+        )
+    )
 
-    log.info("Startup complete — subsequent connections served from cache.")
+    log.info("Startup complete - subsequent connections served from cache.")
 
     return dict(
         CELLS=cells,
@@ -424,7 +427,7 @@ except FileNotFoundError as e:
 
 
 # ---------------------------------------------------------------------------
-# Widgets — MAR selection (dependent dropdowns)
+# Widgets - MAR selection (dependent dropdowns)
 # ---------------------------------------------------------------------------
 
 mar_objective = pn.widgets.Select(
@@ -486,7 +489,7 @@ mar_water_type.param.watch(_update_method_opts,"value")
 
 
 # ---------------------------------------------------------------------------
-# Widgets — MCE theme weights
+# Widgets - MCE theme weights
 # ---------------------------------------------------------------------------
 
 _v_need  = THEMES["need_for_mar"]["weight"]
@@ -494,68 +497,71 @@ _v_geo   = THEMES["geological_suitability"]["weight"]
 _v_water = THEMES["water_availability"]["weight"]
 
 w_need = pn.widgets.FloatSlider(
-    name="Demand: Need for MAR",
+    name="1. Demand: Need for MAR",
     value=_v_need,
     start=0.0, end=1.0, step=0.01,
     stylesheets=_THEME_SLIDER_SS,
 )
 w_geo = pn.widgets.FloatSlider(
-    name="Feasibility: Hydrogeology",
+    name="2. Feasibility: Hydrogeology",
     value=_v_geo,
     start=0.0, end=1.0, step=0.01,
     stylesheets=_THEME_SLIDER_SS,
 )
 w_water = pn.widgets.FloatSlider(
-    name="Supply: Water Availability",
+    name="3. Supply: Water Availability",
     value=_v_water,
     start=0.0, end=1.0, step=0.01,
     stylesheets=_THEME_SLIDER_SS,
 )
 
-# ── Need for MAR sub-criteria (dummy — data pending) ──────────────────────
+# ── Need for MAR sub-criteria (dummy - data pending) ──────────────────────
+_ph = _SUB_SLIDER_PLACEHOLDER_SS   # shorthand: placeholder (red label)
+_ac = _SUB_SLIDER_SS               # shorthand: active (normal label)
+
 w_need_gwdte    = pn.widgets.FloatSlider(
-    name="GWDTE Proximity  [ED]",              value=0.25, start=0, end=1, step=0.01,
-    stylesheets=_SUB_SLIDER_SS, margin=(5, 10, 5, 10))
+    name="1.1  GWDTE Proximity  [ED]",              value=0.25, start=0, end=1, step=0.01,
+    stylesheets=_ph, margin=(5, 10, 5, 10))
 w_need_sw_prio  = pn.widgets.FloatSlider(
-    name="Surface Water Priority  [ED]",       value=0.25, start=0, end=1, step=0.01,
-    stylesheets=_SUB_SLIDER_SS, margin=(5, 10, 5, 10))
+    name="1.2  Surface Water Body Priority  [ED]",  value=0.25, start=0, end=1, step=0.01,
+    stylesheets=_ph, margin=(5, 10, 5, 10))
 w_need_abs_risk = pn.widgets.FloatSlider(
-    name="GW Abstractions at Risk  [ED]",      value=0.10, start=0, end=1, step=0.01,
-    stylesheets=_SUB_SLIDER_SS, margin=(5, 10, 5, 10))
+    name="1.3  GW Abstractions at Risk  [ED]",      value=0.10, start=0, end=1, step=0.01,
+    stylesheets=_ph, margin=(5, 10, 5, 10))
 w_need_cams     = pn.widgets.FloatSlider(
-    name="CAMS Ledger Deficit  [AWB]",         value=0.20, start=0, end=1, step=0.01,
-    stylesheets=_SUB_SLIDER_SS, margin=(5, 10, 5, 10))
+    name="1.4  CAMS Ledger Deficit  [AWB]",         value=0.20, start=0, end=1, step=0.01,
+    stylesheets=_ph, margin=(5, 10, 5, 10))
 w_need_cso      = pn.widgets.FloatSlider(
-    name="CSO / WwTW Proximity  [DWMP]",       value=0.20, start=0, end=1, step=0.01,
-    stylesheets=_SUB_SLIDER_SS, margin=(5, 10, 5, 10))
+    name="1.5  CSO / WwTW Proximity  [DWMP]",       value=0.20, start=0, end=1, step=0.01,
+    stylesheets=_ph, margin=(5, 10, 5, 10))
 
 # ── Geological sub-criteria (real BGS data for aquifer + SDTM) ───────────
 w_aquifer     = pn.widgets.FloatSlider(
-    name="Aquifer Classification",             value=0.50, start=0, end=1, step=0.01,
-    stylesheets=_SUB_SLIDER_SS, margin=(5, 10, 5, 10))
+    name="2.1  Aquifer Classification",             value=0.50, start=0, end=1, step=0.01,
+    stylesheets=_ac, margin=(5, 10, 5, 10))
 w_sdtm        = pn.widgets.FloatSlider(
-    name="SDTM Thickness  [infiltration]",     value=0.20, start=0, end=1, step=0.01,
-    stylesheets=_SUB_SLIDER_SS, margin=(5, 10, 5, 10))
+    name="2.2  SDTM Thickness  [infiltration]",     value=0.20, start=0, end=1, step=0.01,
+    stylesheets=_ac, margin=(5, 10, 5, 10))
 w_slope       = pn.widgets.FloatSlider(
-    name="Topography / Slope  [infiltration]", value=0.10, start=0, end=1, step=0.01,
-    stylesheets=_SUB_SLIDER_SS, margin=(5, 10, 5, 10))
+    name="2.3  Topography / Slope  [infiltration]", value=0.10, start=0, end=1, step=0.01,
+    stylesheets=_ph, margin=(5, 10, 5, 10))
 w_depth_water = pn.widgets.FloatSlider(
-    name="Depth to Water",                     value=0.10, start=0, end=1, step=0.01,
-    stylesheets=_SUB_SLIDER_SS, margin=(5, 10, 5, 10))
+    name="2.4  Depth to Water",                     value=0.10, start=0, end=1, step=0.01,
+    stylesheets=_ph, margin=(5, 10, 5, 10))
 w_surf_geo    = pn.widgets.FloatSlider(
-    name="Surface Geology  [infiltration]",    value=0.10, start=0, end=1, step=0.01,
-    stylesheets=_SUB_SLIDER_SS, margin=(5, 10, 5, 10))
+    name="2.5  Surface Geology  [infiltration]",    value=0.10, start=0, end=1, step=0.01,
+    stylesheets=_ph, margin=(5, 10, 5, 10))
 
-# ── Water Availability sub-criteria (dummy — data pending) ────────────────
+# ── Water Availability sub-criteria (dummy - data pending) ────────────────
 w_water_storm = pn.widgets.FloatSlider(
-    name="Storm Water at Network Points  [DWMP]", value=0.33, start=0, end=1, step=0.01,
-    stylesheets=_SUB_SLIDER_SS, margin=(5, 10, 5, 10))
+    name="3.1  Storm Water at Network Points  [DWMP]", value=0.33, start=0, end=1, step=0.01,
+    stylesheets=_ph, margin=(5, 10, 5, 10))
 w_water_drink = pn.widgets.FloatSlider(
-    name="Drinking Water Availability",            value=0.33, start=0, end=1, step=0.01,
-    stylesheets=_SUB_SLIDER_SS, margin=(5, 10, 5, 10))
+    name="3.2  Drinking Water Availability",            value=0.33, start=0, end=1, step=0.01,
+    stylesheets=_ph, margin=(5, 10, 5, 10))
 w_water_tww   = pn.widgets.FloatSlider(
-    name="Treated Waste Water  (WwTW proximity)", value=0.34, start=0, end=1, step=0.01,
-    stylesheets=_SUB_SLIDER_SS, margin=(5, 10, 5, 10))
+    name="3.3  Treated Waste Water  (WwTW proximity)", value=0.34, start=0, end=1, step=0.01,
+    stylesheets=_ph, margin=(5, 10, 5, 10))
 
 _INFIL_ONLY_WIDGETS = [w_sdtm, w_slope, w_surf_geo]
 
@@ -570,7 +576,7 @@ mar_method_sel.param.watch(_on_method_change, "value")
 
 
 # ---------------------------------------------------------------------------
-# Widgets — display controls
+# Widgets - display controls
 # ---------------------------------------------------------------------------
 
 layer_checks = pn.widgets.CheckBoxGroup(
@@ -582,9 +588,9 @@ layer_checks = pn.widgets.CheckBoxGroup(
         "Study Boundary",
         "GW Mgmt Units",
         "GW Models",
-        "Hydrogeology (BGS)  — coming soon",
-        "SW Catchments  — coming soon",
-        "Rivers  — coming soon",
+        "Hydrogeology (BGS)  - coming soon",
+        "SW Catchments  - coming soon",
+        "Rivers  - coming soon",
     ],
 )
 
@@ -646,6 +652,165 @@ def _compute_geo_composite(df, method, w_aq, w_sd, w_sl, w_dw, w_sg):
 
 
 # ---------------------------------------------------------------------------
+# Data Sources tab
+# ---------------------------------------------------------------------------
+
+_DS_YAML = Path(__file__).parent / "data_sources.yaml"
+
+_STATUS_BADGE = {
+    "active":      ("✔ Active",      "#27ae60"),
+    "placeholder": ("⚠ Placeholder", "#e67e00"),
+    "coming_soon": ("🔜 Coming soon", "#7f8c8d"),
+    "overlay":     ("⬚ Overlay",     "#2980b9"),
+}
+
+
+def _format_field(label: str, value) -> str:
+    """Render one YAML field as Markdown for the Data Sources tab.
+
+    Single-line → **Label:** value
+    Multi-line  → **Label:** on its own line, then forced <br> per content line.
+                  Leading '>' is escaped so it doesn't render as a blockquote.
+                  Trailing empty lines (YAML | scalar artifact) are stripped.
+    """
+    v = str(value).strip()
+    if "\n" not in v:
+        return f"**{label}:** {v}  "
+
+    lines = v.split("\n")
+    # Strip trailing empty lines produced by YAML | block scalars.
+    while lines and not lines[-1].strip():
+        lines.pop()
+    # Escape '>' at the very start of a line (Markdown blockquote syntax).
+    lines = [re.sub(r"^(\s*)>", r"\1&gt;", l) for l in lines]
+
+    body = "  \n".join(lines)
+    return f"**{label}:**  \n{body}  "
+
+
+def _build_data_sources_tab() -> pn.Column:
+    try:
+        with open(_DS_YAML, encoding="utf-8") as f:
+            ds = yaml.safe_load(f)
+    except FileNotFoundError:
+        return pn.Column(pn.pane.Alert(
+            f"data_sources.yaml not found at {_DS_YAML}", alert_type="warning"
+        ))
+
+    _h1 = [":host h2 { font-size:15px; font-weight:700; color:#1a3a5c; margin:8px 0 2px 0; }"]
+    _h2 = [":host h3 { font-size:12px; font-weight:600; color:#1a3a5c; margin:4px 0 1px 0; }"]
+
+    rows = [pn.pane.Markdown(
+        "Data sources, licences and processing steps for each criterion. "
+        "Edit `dashboard/data_sources.yaml` to update this tab.\n\n---",
+        styles={"color": "#555", "font-size": "0.85em"},
+        sizing_mode="stretch_width",
+    )]
+
+    # ── MCE themes ────────────────────────────────────────────────────────────
+    for i_theme, theme in enumerate(ds.get("themes", []), 1):
+        rows.append(pn.pane.Markdown(
+            f"## {i_theme}. {theme['label']}",
+            stylesheets=_h1, sizing_mode="stretch_width",
+        ))
+        if theme.get("description"):
+            rows.append(pn.pane.Markdown(
+                f"_{theme['description'].strip()}_",
+                styles={"color": "#555", "font-size": "0.83em"},
+                stylesheets=[":host p { margin: 0; } :host { margin: 0 0 4px 0; }"],
+                sizing_mode="stretch_width",
+            ))
+
+        for i_crit, crit in enumerate(theme.get("criteria", []), 1):
+            label, colour = _STATUS_BADGE.get(
+                crit.get("status", "placeholder"), ("?", "#888")
+            )
+            badge = (
+                f"<span style='background:{colour};color:white;"
+                f"padding:1px 7px;border-radius:3px;font-size:0.78em;"
+                f"font-weight:600;margin-left:6px'>{label}</span>"
+            )
+            number = f"{i_theme}.{i_crit}"
+            name_html = (
+                f"<span style='color:#c0392b'>{crit['name']}</span>"
+                if crit.get("status") == "placeholder"
+                else crit["name"]
+            )
+            md_lines = [f"### {number}  {name_html} {badge}"]
+            if crit.get("sidebar_slider"):
+                md_lines.append(
+                    f"_Sidebar slider: **{crit['sidebar_slider']}**_"
+                )
+            md_lines.append("")
+
+            fields = [
+                ("Source",      crit.get("source")),
+                ("Licence",     crit.get("licence")),
+                ("Accessed",    crit.get("date_accessed")),
+                ("Key field",   crit.get("key_field")),
+                ("Gridding",    crit.get("gridding", "").strip()),
+                ("Scoring",     crit.get("scoring", "").strip()),
+                ("Notes",       crit.get("notes")),
+            ]
+            for k, v in fields:
+                if v:
+                    md_lines.append(_format_field(k, v))
+
+            rows.append(pn.pane.Markdown(
+                "\n".join(md_lines),
+                stylesheets=_h2,
+                sizing_mode="stretch_width",
+                styles={"border-left": f"3px solid {colour}",
+                        "padding-left": "10px", "margin": "6px 0 10px 0"},
+            ))
+
+        rows.append(pn.layout.Divider())
+
+    # ── Overlay layers ────────────────────────────────────────────────────────
+    rows.append(pn.pane.Markdown("## Overlay Layers", stylesheets=_h1,
+                                  sizing_mode="stretch_width"))
+    rows.append(pn.pane.Markdown(
+        "_Context layers toggled via the Layer checkboxes. Not used in MCE scoring._",
+        styles={"color": "#555", "font-size": "0.83em"},
+        sizing_mode="stretch_width",
+    ))
+
+    for i_ov, ov in enumerate(ds.get("overlays", []), 1):
+        label, colour = _STATUS_BADGE.get(
+            ov.get("status", "overlay"), ("?", "#888")
+        )
+        badge = (
+            f"<span style='background:{colour};color:white;"
+            f"padding:1px 7px;border-radius:3px;font-size:0.78em;"
+            f"font-weight:600;margin-left:6px'>{label}</span>"
+        )
+        md_lines = [f"### O.{i_ov}  {ov['name']} {badge}"]
+        if ov.get("layer_checkbox"):
+            md_lines.append(f"_Layer checkbox: **{ov['layer_checkbox']}**_")
+        md_lines.append("")
+        for k, v in [("Source", ov.get("source")),
+                     ("Licence", ov.get("licence")),
+                     ("Accessed", ov.get("date_accessed")),
+                     ("Notes", ov.get("notes"))]:
+            if v:
+                md_lines.append(_format_field(k, v))
+
+        rows.append(pn.pane.Markdown(
+            "\n".join(md_lines),
+            stylesheets=_h2,
+            sizing_mode="stretch_width",
+            styles={"border-left": f"3px solid {colour}",
+                    "padding-left": "10px", "margin": "6px 0 10px 0"},
+        ))
+
+    return pn.Column(*rows, sizing_mode="stretch_width",
+                     styles={"padding": "12px 20px"})
+
+
+_data_sources_tab = _build_data_sources_tab()
+
+
+# ---------------------------------------------------------------------------
 # Layout
 # ---------------------------------------------------------------------------
 
@@ -660,7 +825,7 @@ def _sel_summary(obj, wt, method):
         text = "→ " + " → ".join(parts)
         color = "#27AE60"
     else:
-        text  = "_No filter — showing all combinations_"
+        text  = "_No filter - showing all combinations_"
         color = "#888"
     return pn.pane.Markdown(
         text,
@@ -867,7 +1032,7 @@ else:
 | High (≥7) | {hi:,} | {100*hi/n:.1f}% |
 | Medium (4–7) | {med:,} | {100*med/n:.1f}% |
 | Low (<4) | {lo:,} | {100*lo/n:.1f}% |
-| Excluded | {excl:,} | — |
+| Excluded | {excl:,} | - |
 
 **Mean score (feasible):** {feasible.mean():.2f} / 10
 """, width=SIDEBAR_W - 20)
@@ -885,35 +1050,52 @@ else:
     # Sidebar assembly
     # -----------------------------------------------------------------------
 
-    _card_styles = {
-        "border-radius": "0",
-        "box-shadow": "none",
-        "border": "none",
-    }
     _card_ss = ["""
         :host .card-header {
+            background: transparent !important;
+            border: none !important;
+            padding: 3px 6px !important;
+            min-height: 22px !important;
             border-radius: 0 !important;
-            background: #edf2f5 !important;
         }
-        :host .card-header button {
-            color: #1a3a5c !important;
-        }
-        h3 {
-            font-size: 12px !important;
-            font-weight: 300 !important;
-            color: #1a3a5c !important;
+        :host .card-header button,
+        :host .card-header h3 {
+            background: transparent !important;
+            border: none !important;
             margin: 0 !important;
+            padding: 0 !important;
+            opacity: 0.85;
+        }
+        :host .card-header button:hover,
+        :host .card-header h3:hover {
+            opacity: 1.0;
         }
     """]
 
+    def _card_styles(accent):
+        return {
+            "border-radius": "0",
+            "box-shadow": "none",
+            "border": "none",
+            "border-left": f"3px solid {accent}",
+            "border-top": "1px solid #e8edf0",
+            "margin-top": "0",
+        }
+
+    _card_title = (
+        "<span style='font-size:13px;font-weight:400;color:#3d5a73;"
+        "letter-spacing:0.04em'>"
+        "▸  Sub-criteria weights</span>"
+    )
+
     _need_card = pn.Card(
         w_need_gwdte, w_need_sw_prio, w_need_abs_risk, w_need_cams, w_need_cso,
-        title="▾  Sub-criteria  (dummy data)",
+        title=_card_title,
         collapsed=True, collapsible=True,
         sizing_mode="stretch_width",
-        styles=_card_styles,
+        styles=_card_styles("#2980b9"),
         stylesheets=_card_ss,
-        margin=(2, 5, 8, 5),
+        margin=(0, 5, 8, 5),
     )
     _geo_card = pn.Card(
         pn.pane.Markdown(
@@ -921,21 +1103,21 @@ else:
             styles={"color": "#777", "font-size": "0.78em"},
         ),
         w_aquifer, w_sdtm, w_slope, w_depth_water, w_surf_geo,
-        title="▾  Sub-criteria",
+        title=_card_title,
         collapsed=True, collapsible=True,
         sizing_mode="stretch_width",
-        styles=_card_styles,
+        styles=_card_styles("#27ae60"),
         stylesheets=_card_ss,
-        margin=(2, 5, 8, 5),
+        margin=(0, 5, 8, 5),
     )
     _water_card = pn.Card(
         w_water_storm, w_water_drink, w_water_tww,
-        title="▾  Sub-criteria  (dummy data)",
+        title=_card_title,
         collapsed=True, collapsible=True,
         sizing_mode="stretch_width",
-        styles=_card_styles,
+        styles=_card_styles("#e67e22"),
         stylesheets=_card_ss,
-        margin=(2, 5, 8, 5),
+        margin=(0, 5, 8, 5),
     )
 
     _sh_ss = [":host h3 { font-size: 16px; font-weight: 700; color: #1a3a5c; margin: 0 0 2px 0; }"]
@@ -977,7 +1159,7 @@ else:
         _div(),
 
         # ── Display ───────────────────────────────────────────────────────
-        _sh("Display"),
+        _sh("Display and Overlays"),
         colour_by,
         layer_checks,
         _div(),
@@ -997,8 +1179,10 @@ else:
     )
 
     main_content = pn.Tabs(
-        ("Suitability Map",   pn.Column(map_pane,    sizing_mode="stretch_both")),
-        ("MAR Decision Tree", pn.Column(sankey_pane, sizing_mode="stretch_both")),
+        ("Suitability Map",   pn.Column(map_pane,           sizing_mode="stretch_both")),
+        ("MAR Decision Tree", pn.Column(sankey_pane,        sizing_mode="stretch_both")),
+        ("Data Sources",      pn.Column(_data_sources_tab,  sizing_mode="stretch_both",
+                                        scroll=True)),
         sizing_mode="stretch_both",
     )
 
@@ -1007,7 +1191,7 @@ else:
 # Template
 # ---------------------------------------------------------------------------
 
-_subtitle = "Phase 1 — Screening"
+_subtitle = "Phase 1 - Screening"
 template = pn.template.FastListTemplate(
     title=(
         f"{CFG['dashboard']['title']}"

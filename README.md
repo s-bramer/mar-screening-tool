@@ -7,7 +7,7 @@ sdk: docker
 pinned: false
 ---
 
-# MAR-ST — Managed Aquifer Recharge Suitability Tool
+# MAR-ST - Managed Aquifer Recharge Suitability Tool
 
 > Spatial suitability screening and interactive dashboard for identifying
 > Aquifer Storage Recovery (ASR) and Managed Aquifer Recharge (MAR) sites across the UK.
@@ -28,13 +28,15 @@ MAR-ST computes multiple spatial datasets, applies a weighted **Multi-Criteria E
 
 ## Features
 
-- **1 km suitability grid** — ~18,700 cells scored across geological, demand and water-availability
-- **BGS data** — hydrogeology (625K), bedrock & superficial geology, superficial deposit thickness (SDTM)
-- **Hard constraints** — non-productive aquifer cells and GWDTEs (so far) are excluded automatically
-- **Weight sliders** — adjust MCE theme weights, composite scores update instantly
-- **Overlay layers** — hydrogeology, GWMUs, surface-water catchments, rivers, GWMs and GWDTEs
-- **Hover tooltips** — per-cell breakdown of geo score, SDTM score, composite score and constraint status
-- **Export-ready** — `processed/` outputs are standard GeoPackages consumable by QGIS or ArcGIS
+- **1 km suitability grid** — ~18,700 cells scored across three MCE themes; composite score updates live with weight sliders
+- **Numbered sub-criteria system** — 14 criteria across three themes (1.1–1.5, 2.1–2.5, 3.1–3.3) with per-criterion weight sliders in a collapsible sidebar
+- **Real BGS data** — hydrogeology classification (2.1) and SDTM deposit thickness (2.2) fully processed and scored
+- **Hard constraints** — non-productive aquifer cells and GWDTEs excluded automatically; excluded cells rendered in red
+- **MAR Decision Tree** — Sankey diagram mapping MAR Objectives → Water Sources → Recharge Methods with path highlighting
+- **Data Sources tab** — live documentation of all input datasets, scoring methodology, licence and status; driven by `data_sources.yaml` (no code change needed to update)
+- **Overlay layers** — GWMUs, GW model extents, study boundary; hydrogeology, catchments and rivers coming soon
+- **Hover tooltips** — per-cell breakdown of need, geo and water scores plus composite and constraint status
+- **Export-ready** — `processed/` GeoPackages consumable in QGIS or ArcGIS
 
 ---
 
@@ -42,42 +44,42 @@ MAR-ST computes multiple spatial datasets, applies a weighted **Multi-Criteria E
 
 ```
 mar-screening-tool/
-├── config.yaml              ← all parameters, paths, weights, score maps
-├── env.yml                  ← conda environment specification
-├── .gitignore
-├── CLAUDE.md                ← AI assistant project instructions
+├── config.yaml                   ← all parameters, paths, weights, score maps
+├── env.yml                       ← conda environment specification
+├── ROADMAP.md                    ← build status and open tasks (live document)
 │
-├── src/mar_st/              ← core library
-│   ├── config.py            ← load config.yaml, resolve paths
-│   ├── utils.py             ← CRS validation, logging helpers
-│   ├── grid.py              ← 1 km master grid creation
-│   ├── ingest.py            ← per-dataset loaders, scoring, spatial join
-│   └── mce.py               ← weighted-sum + constraints engine
+├── src/mar_st/                   ← core library
+│   ├── config.py
+│   ├── utils.py
+│   ├── grid.py                   ← 1 km master grid creation
+│   ├── ingest.py                 ← per-dataset loaders, scoring, spatial joins
+│   └── mce.py                    ← weighted-sum + constraints engine
 │
 ├── scripts/
-│   └── preprocess.py        ← run once; reads data/, writes processed/
+│   ├── preprocess.py             ← run once; reads data/, writes processed/
+│   └── export_grid_shapefile.py  ← exports reference grid as shapefile
 │
 ├── dashboard/
-│   └── app.py               ← Panel dashboard (FastListTemplate)
+│   ├── app.py                    ← Panel dashboard
+│   └── data_sources.yaml         ← dataset documentation for Data Sources tab
 │
-├── tests/                   ← pytest suite
+├── tests/
 │
-├── data/                    ← raw spatial inputs (not tracked in git)
-│   ├── BGS/                 ← hydrogeology, bedrock, superficial geology, SDTM
-│   ├── EA/                  ← GWMUs, WFD catchments, GWDTEs
-│   ├── OS/                  ← OS Open Rivers (WatercourseLink)
-│   ├── GWMs/                ← regional groundwater model boundaries
-│   └── shapes/              ← study area boundary
+├── data/                         ← raw spatial inputs (not tracked in git)
+│   ├── BGS/
+│   ├── EA/
+│   ├── OS/
+│   ├── GWMs/
+│   └── shapes/
 │
-└── processed/               ← generated GeoPackages (not tracked in git)
-    ├── grid.gpkg             18,686-cell suitability grid
+└── processed/                    ← generated outputs (not tracked in git)
+    ├── grid.gpkg                 ← ~18,700-cell suitability grid
+    ├── hover_base.csv            ← pre-computed dashboard data
     ├── hydrogeology.gpkg
-    ├── bedrock.gpkg
-    ├── superficial.gpkg
-    ├── gwmu.gpkg
+    ├── gwmu.gpkg / gwmu_3857.gpkg
     ├── gwdte.gpkg
-    ├── sw_catchments.gpkg
-    └── rivers.gpkg
+    ├── boundary_3857.gpkg
+    └── ...
 ```
 
 > **Note:** `data/` and `processed/` are excluded from version control. Raw data must be sourced separately; processed outputs are regenerated by `scripts/preprocess.py`.
@@ -129,68 +131,55 @@ The dashboard opens in your browser at `http://localhost:5006`.
 
 ## MCE Framework
 
-Composite suitability is a weighted linear combination of three themes:
+Composite suitability is a weighted linear combination of three themes, each decomposed into sub-criteria. Weights are adjustable via the dashboard sidebar. All scores normalised to **0–10**. Cells that fail a hard constraint (currently: non-productive aquifer or GWDTE overlap) are excluded entirely.
 
-| Theme | Phase 1 Data | Default Weight |
-|-------|-------------|----------------|
-| Geological Suitability | BGS hydrogeology classification + SDTM thickness | 0.34 |
-| Need for MAR | GWMU-seeded dummy *(placeholder)* | 0.33 |
-| Water Availability | Random dummy *(placeholder)* | 0.33 |
+| # | Theme | Default weight |
+|---|-------|---------------|
+| 1 | Demand — Need for MAR | 0.33 |
+| 2 | Feasibility — Hydrogeology | 0.34 |
+| 3 | Supply — Water Availability | 0.33 |
 
-Weights are adjustable via the dashboard sidebar. All scores are normalised to **0–10**. Cells are zeroed out entirely if they fail a **hard constraint** (non-productive aquifer or GWDTE overlap).
+### Sub-criteria
 
-### Geological scoring (BGS 625K CHARACTER field)
+| # | Criterion | Data source | Status |
+|---|-----------|-------------|--------|
+| 1.1 | GWDTE Proximity [ED] | EA GWDTEs | Placeholder |
+| 1.2 | Surface Water Body Priority [ED] | EA WFD WB status | Placeholder |
+| 1.3 | GW Abstractions at Risk [ED] | EA WRGIS abstractions | Placeholder — processing in progress |
+| 1.4 | CAMS Ledger Deficit [AWB] | EA WRGIS CAMS APs | Placeholder |
+| 1.5 | CSO / WwTW Proximity [DWMP] | ST SOAP / DWMP | Placeholder |
+| 2.1 | Aquifer Classification | BGS Hydrogeology 625K | **Active** |
+| 2.2 | SDTM Thickness [infiltration] | BGS SDTM 1 km | **Active** |
+| 2.3 | Topography / Slope [infiltration] | EA LiDAR DTM 10 m | Placeholder — data received |
+| 2.4 | Depth to Water | EA groundwater models | Placeholder |
+| 2.5 | Surface Geology [infiltration] | BGS DiGMapGB 625K | Placeholder |
+| 3.1 | Storm Water at Network Points [DWMP] | ST network data | Placeholder |
+| 3.2 | Drinking Water Availability | ST supply network mains | Placeholder — data received |
+| 3.3 | Treated Waste Water [WwTW proximity] | EA discharge consents | Placeholder |
 
-| Classification | Score |
-|---------------|-------|
-| Highly productive aquifer | 10 |
-| Moderately productive aquifer | 6 |
-| Low productivity aquifer | 2 |
-| Rocks with essentially no groundwater | 0 |
+See `dashboard/data_sources.yaml` for full source, licence and scoring detail per criteria.
 
----
 
 ## Configuration
 
 All parameters in `config.yaml`. Key sections:
 
-- **`paths`** — data and processed directory roots
-- **`data_sources`** — file paths and field names for each dataset
-- **`hydrogeology_scores`** — CLASS → score mapping
-- **`sdtm_scoring`** — piecewise linear breakpoints for deposit thickness
-- **`mce.themes`** — default weights per theme
-- **`constraints`** — toggle hard constraint layers on/off
-- **`dashboard`** — title, map height, sidebar width
+- **`paths`** - data and processed directory roots
+- **`data_sources`** - file paths and field names for each dataset
+- **`hydrogeology_scores`** - CLASS → score mapping
+- **`sdtm_scoring`** - piecewise linear breakpoints for deposit thickness
+- **`mce.themes`** - default weights per theme
+- **`constraints`** - toggle hard constraint layers on/off
+- **`dashboard`** - title, map height, sidebar width
 
 ---
 
-## Known Limitations (Phase 1)
+## Known Limitations
 
-1. **Need for MAR / Water Availability** — dummy scores, flagged red in the dashboard sidebar
-2. **Dominant-polygon rule** — where multiple geology polygons overlap a 1 km cell, the largest fragment wins; area-weighted mean can be swapped in later
-3. **MAR Objective selector** — UI control exists but is not yet wired to alternative scoring logic
-4. **AHP weights** — flat sliders used for now; pairwise comparison matrix planned for Phase 2
-
----
-
-## To Do
-
-- [ ] Add Water Availability, Need-for-MAR layers (CAMS data)
-- [ ] Add DWMP data 
-- [ ] Prepare decision flow chart 
-- [ ] Add AHP pairwise weight matrix to replace flat weight sliders
-- [ ] Add click-to-query — cell click shows per-theme score breakdown (hover will become busy)
-- [ ] Source Protection Zones (SPZ1) constraint layer
-- [ ] Groundwater flooding / contaminated land constraints
-- [ ] Export selected cells as shapefile / CSV report?
-
----
-
-## Running Tests
-
-```bash
-conda activate mar-st
-pytest tests/
-```
+1. **11 of 13 sub-criteria use placeholder scores** — flagged red in the sidebar; real data processing ongoing
+2. **Sub-criteria sliders are cosmetic** — weights shown per criterion but the composite currently uses theme-level weights only; sub-criteria weighting not yet wired into scoring
+3. **Dominant-polygon rule** — where multiple geology polygons overlap a 1 km cell, the largest fragment wins; area-weighted mean can be introduced later
+4. **MAR Objective selector** — UI control and Sankey exist but the selector does not yet filter the suitability scoring; it informs the display only
+5. **AHP weights** — flat linear sliders used; pairwise comparison matrix planned for Phase 2
 
 ---

@@ -1,6 +1,12 @@
 # --- Raw data (not tracked) ---
 data/
 
+# --- Documentation (not tracked) ---
+docs/
+
+# --- Exported outputs (shapefiles, GeoPackages for sharing) ---
+exports/
+
 # --- Processed data: allow dashboard files, exclude inactive/large layers ---
 processed/hydrogeology.gpkg
 processed/hydrogeology_3857.gpkg
@@ -31,6 +37,8 @@ build/
 
 # --- Claude Code (local session config — not for sharing) ---
 .claude/
+CLAUDE.md
+ROADMAP.md
 
 # --- IDE ---
 .vscode/

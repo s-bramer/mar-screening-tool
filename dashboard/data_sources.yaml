@@ -1,0 +1,300 @@
+# MAR-ST Data Sources
+# ============================================================
+# Edit this file to update the "Data Sources" tab in the dashboard.
+# No code changes needed - the tab re-reads this file on server restart.
+#
+# status options:
+#   active      - real data, processing complete, used in scoring
+#   placeholder - dummy/spatially coherent values; real data pending
+#   coming_soon - layer exists in UI but not yet loaded
+#   overlay     - spatial context layer only; not used in MCE scoring
+# ============================================================
+
+themes:
+
+  - label: "Demand - Need for MAR"
+    description: >
+      Identifies where MAR is most needed: stressed groundwater bodies,
+      over-abstracted catchments, GWDTE's, DWMP pressure points.
+    criteria:
+
+      - name: "GWDTE Proximity  [ED]"
+        sidebar_slider: "1.1  GWDTE Proximity  [ED]"
+        status: placeholder
+        source: "EA - Groundwater Dependent Terrestrial Ecosystems (GWDTEs)"
+        licence: "Environment Agency (OGL v3)"
+        date_accessed: "TBC"
+        key_field: "Presence/absence polygon; proximity calculated at preprocessing"
+        gridding: >
+          Distance from each cell centre to nearest GWDTE polygon.
+          Cells overlapping a GWDTE are hard-excluded from scoring (constraint = 0).
+          Nearby cells (< 2 km) scored higher for Environmental Destination objective.
+        scoring: "Proximity distance → 0–10. TBC."
+        notes: "Placeholder dummy values used. GWDTEs currently used as hard constraint only."
+
+      - name: "Surface Water Priority  [ED]"
+        sidebar_slider: "1.2  Surface Water Body Priority  [ED]"
+        status: placeholder
+        source: "EA - WFD Surface Water Body Status / Priority Score (file: ***MAR-ST Water Body Data.xslx***)"
+        licence: "supplied by AG (OGL v3?)"
+        date_accessed: "TBC"
+        key_field: "Priority Bracket (Very Low / Low / Medium / High) per water body"
+        gridding: "Spatial join of water body score to grid."
+        scoring: "Prioritisation score based on EDM12 method (Motts) as part of the ED project."
+        notes: "Placeholder dummy values used. **NOTE: All WB's score High Priority. Use EDM12 score values to grade?**"
+
+      - name: "GW Abstractions at Risk  [ED]"
+        sidebar_slider: "1.3  GW Abstractions at Risk  [ED]"
+        status: placeholder
+        source: "EA WRGIS - Groundwater Abstractions (file: ***MAR-ST_SourceData.xlsx***)"
+        licence: "supplied by AG (OGL v3?)"
+        date_accessed: "TBC"
+        key_field: "Reduction = max(0, Annual Licence / 365 − 'ADO PR24') [Ml/d per well]"
+        gridding:
+          Wells spatial joined to 1 km grid cell.
+          Reduction values are summed for all wells within each cell.
+        scoring:
+          Scored according to potential size of abstraction reduction.
+          Summed reduction normalised to 0-10 score (TBC).
+            0          →  1  (no risk)
+            0–5        →  3–4
+            5–10       →  5–7
+            >10        →  8–10  (highest risk).
+        notes: "Placeholder dummy values used. **NOTE: Add check for over-abstracting wells (RA>ADO) → Highest Risk assigned and NDB check.**"
+    
+      - name: "CAMS Ledger Deficit  [AWB]"
+        sidebar_slider: "1.4  CAMS Ledger Deficit  [AWB]"
+        status: placeholder
+        source: "EA WRGIS (WRGISMay26) - CAMS Assessment Points (CAMS_AP_inST)"
+        licence: "Environment Agency (OGL v3)"
+        date_accessed: "July 2026"
+        key_field: "SDRAQ95ups - Recent Actual surplus/deficit at Q95 [Ml/d]"
+        gridding: >
+          Spatial join of grid cells to EA WFD catchment polygons via EA_WB_ID field.
+          Most downstream AP per WFD catchment selected to avoid
+          double-counting upstream influences.
+        scoring: >
+          Deficit (negative values) → high need for MAR; scored 0–10.
+          Surplus (Ml/d): >0 → 1; 0 → 3; −1 to −5 → 5–7; < −5 → 9–10.
+          TBC.
+        notes: "Placeholder dummy values used."
+
+      - name: "CSO / WwTW Proximity  [DWMP]"
+        sidebar_slider: "1.5  CSO / WwTW Proximity  [DWMP]"
+        status: placeholder
+        source: "Supplied by ST: SVE_SOAP_2025 location of CSO's and ***pDWF Breach Forecast Quality Permit Constraints v1.xlsx***"
+        licence: "Client data - distribution restricted?"
+        date_accessed: "TBC"
+        key_field: "Point locations; proximity calculated at preprocessing"
+        gridding: "Distance from cell centroid to nearest CSO / WwTW point."
+        scoring: "Proximity → 0–10. TBC."
+        notes: "Placeholder dummy values used."
+
+      - name: "WRMP WRZ BL supply demand balance"
+        sidebar_slider: "TBC"
+        status: placeholder
+        source: "Supplied by ST: ***final-WRMP24-tables-Redacted-v2.xlsx*** and Water_Resource_Zones geopackage"
+        licence: "Client data - distribution restricted?"
+        date_accessed: "TBC"
+        key_field: "TBC"
+        gridding: "TBC"
+        scoring: "TBC"
+        notes: "Not in dashboard yet."
+
+
+  - label: "Feasibility - Hydrogeology"
+    description: >
+      Assesses the physical suitability of the surface/subsurface for MAR.
+      Combines aquifer productivity, deposit thickness, topography,
+      depth to water, and surface geology.
+    criteria:
+
+      - name: "Aquifer Classification"
+        sidebar_slider: "2.1  Aquifer Classification"
+        status: active
+        source: "BGS Hydrogeology of Scotland/England/Wales 625K"
+        licence: "British Geological Survey (OGL v3)"
+        date_accessed: "2024"
+        key_field: "CHARACTER - aquifer productivity classification"
+        gridding: >
+          Spatial join (dominant polygon rule - largest fragment wins) of BGS
+          hydrogeology polygons to 1 km grid cells in EPSG:27700.
+        scoring: |
+          Highly productive aquifer          → 10
+          Moderately productive aquifer      →  6
+          Low productivity aquifer           →  2
+          Rocks with essentially no GW       →  0  (hard exclusion applied)
+        notes: "Primary Feasibility criterion. Coarse estimate."
+
+      - name: "SDTM Thickness  [infiltration]"
+        sidebar_slider: "2.2  SDTM Thickness  [infiltration]"
+        status: active
+        source: "BGS Superficial Deposits Thickness Model (SDTM) 1 km"
+        licence: "British Geological Survey (OGL v3)"
+        date_accessed: "2023"
+        key_field: "Mean SDTM thickness per 1 km cell [m]"
+        gridding: >
+          BGS SDTM raster resampled/aggregated to 1 km cell mean thickness.
+          Cells with no superficial deposits assigned 0 m.
+        scoring: |
+          Linear interpolation (piecewise at points below) with optimal thickness ~2 m for infiltration (very thick deposits reduce infiltration rate):
+          0 m → 4,  0.5 m → 6,  2 m → 10,  6 m → 9,  15 m → 6,  30 m → 3
+        notes: "Disabled automatically for Borehole / ASR method."
+
+      - name: "Topography / Slope  [infiltration]"
+        sidebar_slider: "2.3  Topography / Slope  [infiltration]"
+        status: placeholder
+        source: "EA LiDAR Composite DTM 10 m, full cover (file: ***LIDAR_Composite_10m_DTM_2022***)"
+        licence: "Environment Agency (OGL v3)"
+        date_accessed: "2022"
+        key_field: "Mean slope (degrees) per 1 km cell, derived from 10 m DTM"
+        gridding: >
+          Slope raster derived from EA LiDAR 10 m DTM using standard gradient
+          calculation. Mean slope aggregated per 1 km cell.
+          Flat terrain (low slope) preferred for surface infiltration schemes.
+        scoring: |
+          0–2°  → 10,  2–5° → 8,  5–10° → 5,  10–15° → 2,  >15° → 0
+          To be confirmed.
+        notes: "Placeholder dummy values used. Disabled for Borehole/ASR."
+
+      - name: "Depth to Water - NO DATA YET (EA GWM's)"
+        sidebar_slider: "2.4  Depth to Water"
+        status: placeholder
+        source: "**EA GW Models** for GWLs for agreed time period/average; GW Flooding datasets"
+        licence: "TBC"
+        date_accessed: "-"
+        key_field: "Mean depth to water table [m bgl] per 1 km cell"
+        gridding: >
+          Interpolated groundwater level surface (kriging or IDW from observation
+          borehole records) subtracted from DEM to give depth to water table.
+          Aggregated to 1 km cell mean.
+        scoring: |
+          Optimum range: 3–15 m (accessible for borehole; unsaturated for infiltration)
+          0–3 m → 2,  3–8 m → 7,  8–15 m → 10,  15–25 m → 9,  25–40 m → 5,  >40 m → 2
+        notes: "Placeholder dummy values used. **NOTE: Add Aquifer Thickness and Aquifer Properties (using GWMs)**"
+
+      - name: "Surface Geology  [infiltration]"
+        sidebar_slider: "2.5  Surface Geology  [infiltration]"
+        status: placeholder
+        source: "BGS DiGMapGB 625K - Superficial / Bedrock Geology"
+        licence: "British Geological Survey (OGL v3)"
+        date_accessed: "2024"
+        key_field: "Lithology / permeability classification"
+        gridding: >
+          Dominant lithology polygon per 1 km cell mapped to permeability class.
+          Highly permeable superficial deposits (sands, gravels) score highest.
+        scoring: "Lithology → permeability class → 0–10. Mapping TBC."
+        notes: "Placeholder dummy values used. Disabled for Borehole/ASR."
+
+
+  - label: "Supply - Water Availability"
+    description: >
+      Identifies where sufficient water is available to support MAR operations:
+      storm water, treated drinking water, river water or treated wastewater.
+    criteria:
+
+      - name: "Storm Water at Network Points  [DWMP] - NO DATA YET (Jack/Network Modelling)?"
+        sidebar_slider: "3.1  Storm Water at Network Points  [DWMP]"
+        status: placeholder
+        source: "Client-supplied - Storm / CSO network data"
+        licence: "Client data - distribution restricted"
+        date_accessed: "-"
+        key_field: "Storm water volume available at network points [Ml/d or m³/yr]"
+        gridding: >
+          Sum of available storm water volumes at network points within 2 km
+          of each cell centroid.
+        scoring: "Volume → 0–10. Breakpoints TBC."
+        notes: "Placeholder dummy values used. Data not yet received."
+
+      - name: "Drinking Water Availability"
+        sidebar_slider: "3.2  Drinking Water Availability"
+        status: placeholder
+        source: |
+          Supplied by ST (processed by Ollie):
+          (A) Supply network mains - Resource Mains and Strategic Trunk Mains; pre-filtered to diameter >200 mm.
+              Strategic Trunk includes Derwent Valley Aqueduct (DVA, potable) and Elan Valley Aqueduct (EVA, raw water to Trimpley WTW).
+          (B) DSR (District Supply Route) point locations.
+        licence: "Client data - OFFICIAL SENSITIVE?"
+        date_accessed: "2026"
+        key_field: |
+          (A) Capacity index (m3) = L × π × (D/1000)² / 4 per cell [m³]
+              where L = intersected pipe length per cell (m), D = pipe diameter (mm).
+              Calculated separately for Resource Mains and Strategic Trunk (pipes >200 mm only).
+          (B) Distance from cell centroid to nearest DSR point [m].
+        gridding: |
+          Component A - Pipe Capacity Index per cell:
+          Capacity Index summed separately by type: Resource Mains (potable) and Strategic Trunk.
+          Consider:
+          Strategic Trunk split: DVA (potable, weight 1.0) and EVA (raw water, weight 0.6; requires treatment).
+          Total index = Resource Mains + DVA + 0.6 × EVA. Normalised 0–10.
+          Component B - DSR proximity:
+          Distance from cell centroid to nearest DSR.
+          Normalised 0–10 (closer = higher score).
+        scoring: |
+          Composite = Component A × Component B (product, not sum).
+          Product ensures both pipe capacity AND network access are required for a high score.
+          Product rescaled 0–10 across all cells.
+        notes: "Placeholder dummy values used. Phase 2: consider pipe age, material, potable vs raw distinction."
+
+      - name: "Treated Waste Water  [WwTW proximity]"
+        sidebar_slider: "3.3  Treated Waste Water  (WwTW proximity)"
+        status: placeholder
+        source: "Client-supplied / EA - WwTW effluent discharge consents"
+        licence: "OGL v3 / Client data"
+        date_accessed: "-"
+        key_field: "DISCHRA - Recent Actual Discharge [Ml/d]; WwTW location"
+        gridding: >
+          Distance from each cell to nearest WwTW point, weighted by
+          consented discharge volume (CONSDWFMLD).
+        scoring: "Proximity × volume → 0–10. Breakpoints TBC."
+        notes: "Placeholder dummy values used. EA discharge consent data available in WRGIS extract."
+
+
+overlays:
+
+  - name: "Study Boundary"
+    layer_checkbox: "Study Boundary"
+    status: overlay
+    source: "Client-supplied - Severn Trent Supply Area"
+    licence: "Client data - OFFICIAL SENSITIVE?"
+    date_accessed: "2024"
+    notes: >
+      Defines the spatial extent of the study area. Classification under ST's
+      data standard to be confirmed with Data Owner before wider distribution.
+
+  - name: "GW Management Units (GWMUs)"
+    layer_checkbox: "GW Mgmt Units"
+    status: overlay
+    source: "EA - Groundwater Management Units"
+    licence: "Environment Agency (OGL v3)"
+    date_accessed: "2024"
+    notes: "Administrative boundaries for groundwater management. Used for cell labelling in hover tooltip."
+
+  - name: "Groundwater Models (GWMs)"
+    layer_checkbox: "GW Models"
+    status: overlay
+    source: "EA Groundwater Model data - OFFICIAL SENSITIVE?"
+    licence: "Environment Agency (OGL v3)"
+    date_accessed: "2024"
+    notes: "Extents of existing regional groundwater models. Classification to be confirmed."
+
+  - name: "Hydrogeology (BGS)"
+    layer_checkbox: "Hydrogeology (BGS)  - coming soon"
+    status: coming_soon
+    source: "BGS Hydrogeology 625K"
+    licence: "OGL v3 - British Geological Survey"
+    notes: "Display overlay for context. Processing complete; display issues under investigation."
+
+  - name: "SW Catchments"
+    layer_checkbox: "SW Catchments  - coming soon"
+    status: coming_soon
+    source: "EA - WFD Surface Water Management Catchments Cycle 2"
+    licence: "OGL v3 - Environment Agency"
+    notes: "Display overlay for context. Coming soon."
+
+  - name: "Rivers"
+    layer_checkbox: "Rivers  - coming soon"
+    status: coming_soon
+    source: "OS Open Rivers - WatercourseLink"
+    licence: "OS OpenData"
+    notes: "Display overlay for context. Coming soon."

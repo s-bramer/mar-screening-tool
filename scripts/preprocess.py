@@ -12,10 +12,11 @@ Outputs (written to processed/):
   rivers.gpkg        — river network clipped (may take a moment)
 
 Grid score columns:
-  geo_score    — bedrock aquifer productivity (BGS 625K hydrogeology)
-  sdtm_score   — superficial deposit infiltration suitability (BGS SDTM 1km)
-  need_score   — need for MAR (dummy placeholder)
-  water_score  — water availability (dummy placeholder)
+  geo_score       — bedrock aquifer productivity (BGS 625K hydrogeology)
+  sdtm_score      — superficial deposit infiltration suitability (BGS SDTM 1km)
+  abs_risk_score  — GW abstractions at risk / 1.3 (EA WRGIS)
+  need_score      — need for MAR (dummy placeholder; will be replaced by sub-criteria composite)
+  water_score     — water availability (dummy placeholder)
 
 Usage:
   conda activate mar-st
@@ -48,6 +49,138 @@ from mar_st.mce import apply_constraints, weighted_sum, score_sdtm
 from mar_st.utils import get_logger
 
 log = get_logger("preprocess")
+
+
+# ---------------------------------------------------------------------------
+# Column name constants — update if the Excel headers differ
+# ---------------------------------------------------------------------------
+_ABS_FILE         = cfg_mod.ROOT / "data" / "MAR-ST_SourceData.xlsx"
+_ABS_COL_SITE     = "Site"                          # PTSST / Non-PTSST join key
+_ABS_COL_ADO      = "ADO PR24"                      # Deployable Output at PR24 [Ml/d]
+_ABS_COL_RA       = "15 yr RA  Average (2009-2023)" # Recent Actual [Ml/d]
+_ABS_COL_NDB      = "NDB (average 2001-2015)"       # Natural Die-back [Ml/d]
+_ABS_COL_LICENCE  = "Daily Annual/365 Licence (Ml/d)"
+_BH_COL_SITE      = "Site_Name"                     # BoreholeDetails join key
+_BH_COL_EAST      = "Easting"                       # BNG easting  — CONFIRM column name
+_BH_COL_NORTH     = "Northing"                      # BNG northing — CONFIRM column name
+
+# Piecewise scoring: summed cell reduction [Ml/d] → 0–10
+_ABS_SCORE_X = [0.0, 0.1, 1.0,  5.0, 10.0]
+_ABS_SCORE_Y = [1.0, 3.0, 5.0,  8.0, 10.0]
+
+
+def score_abs_risk(grid: gpd.GeoDataFrame, boundary: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
+    """Add abs_risk_score (1.3 GW Abstractions at Risk) to the grid.
+
+    Methodology
+    -----------
+    1. Load PTSST + Non-PTSST abstraction tables and BoreholeDetails from
+       MAR-ST_SourceData.xlsx.
+    2. Compute per-site centroid (mean BNG of all boreholes) and join
+       abstraction metrics.  Centroid approach avoids double-counting at
+       1 km resolution where multi-borehole sites typically sit in one cell.
+    3. Reduction [Ml/d] = max(0, Daily_Licence − ADO_PR24).
+    4. Flag over-abstracting sites: Recent_Actual > ADO_PR24.
+    5. Spatial join sites → grid cells; sum reduction per cell.
+    6. Score piecewise-linear on summed reduction; override to ≥ 8 for any
+       cell containing an over-abstracting site.
+    """
+    log.info("=== GW Abstractions at Risk (1.3) ===")
+
+    # -- Load abstraction tables ------------------------------------------
+    abs_cols = [_ABS_COL_SITE, _ABS_COL_ADO, _ABS_COL_RA,
+                _ABS_COL_NDB, _ABS_COL_LICENCE]
+    ptsst     = pd.read_excel(_ABS_FILE, sheet_name="PTSST",     usecols=abs_cols)
+    non_ptsst = pd.read_excel(_ABS_FILE, sheet_name="Non-PTSST", usecols=abs_cols)
+    abstractions = pd.concat([ptsst, non_ptsst], ignore_index=True)
+
+    n_raw = len(abstractions)
+    abstractions = abstractions.dropna(
+        subset=[_ABS_COL_SITE, _ABS_COL_ADO, _ABS_COL_LICENCE]
+    )
+    log.info(f"  Abstraction rows: {n_raw} loaded, {len(abstractions)} with ADO + licence")
+
+    # -- Per-site risk metrics --------------------------------------------
+    abstractions["reduction_mld"] = np.maximum(
+        0.0, abstractions[_ABS_COL_LICENCE] - abstractions[_ABS_COL_ADO]
+    )
+    abstractions["overabstracting"] = (
+        abstractions[_ABS_COL_RA].notna() &
+        (abstractions[_ABS_COL_RA] > abstractions[_ABS_COL_ADO])
+    )
+
+    n_at_risk = (abstractions["reduction_mld"] > 0).sum()
+    n_over    = abstractions["overabstracting"].sum()
+    log.info(f"  Sites with reduction > 0: {n_at_risk}  |  over-abstracting: {n_over}")
+
+    # -- Load borehole locations; compute site centroids ------------------
+    bh = pd.read_excel(
+        _ABS_FILE, sheet_name="BoreholeDetails",
+        usecols=[_BH_COL_SITE, _BH_COL_EAST, _BH_COL_NORTH],
+    )
+    bh = bh.dropna(subset=[_BH_COL_EAST, _BH_COL_NORTH])
+    site_centroids = (
+        bh.groupby(_BH_COL_SITE)[[_BH_COL_EAST, _BH_COL_NORTH]]
+        .mean()
+        .reset_index()
+        .rename(columns={_BH_COL_SITE: _ABS_COL_SITE})
+    )
+
+    # -- Join centroids to abstraction data --------------------------------
+    sites = abstractions.merge(site_centroids, on=_ABS_COL_SITE, how="left")
+    missing_coords = sites[_BH_COL_EAST].isna().sum()
+    if missing_coords:
+        log.warning(
+            f"  {missing_coords} sites have no matching borehole coordinates "
+            f"(check Site / Site_Name spelling after your manual clean-up)"
+        )
+    sites = sites.dropna(subset=[_BH_COL_EAST, _BH_COL_NORTH])
+    log.info(f"  Sites with coordinates: {len(sites)}")
+
+    # -- GeoDataFrame; clip to study boundary -----------------------------
+    sites_gdf = gpd.GeoDataFrame(
+        sites,
+        geometry=gpd.points_from_xy(sites[_BH_COL_EAST], sites[_BH_COL_NORTH]),
+        crs="EPSG:27700",
+    )
+    sites_gdf = gpd.clip(sites_gdf, boundary)
+    log.info(f"  Sites within study boundary: {len(sites_gdf)}")
+
+    # -- Spatial join: site point → grid cell -----------------------------
+    joined = gpd.sjoin(
+        sites_gdf[["reduction_mld", "overabstracting", "geometry"]],
+        grid[["geometry"]],
+        how="inner",
+        predicate="within",
+    )
+
+    # -- Aggregate per cell -----------------------------------------------
+    cell_agg = joined.groupby("index_right").agg(
+        total_reduction=("reduction_mld", "sum"),
+        n_overabstracting=("overabstracting", "sum"),
+    )
+
+    # -- Score ------------------------------------------------------------
+    cell_agg["abs_risk_score"] = np.interp(
+        cell_agg["total_reduction"].values, _ABS_SCORE_X, _ABS_SCORE_Y
+    )
+    over_mask = cell_agg["n_overabstracting"] > 0
+    cell_agg.loc[over_mask, "abs_risk_score"] = np.maximum(
+        cell_agg.loc[over_mask, "abs_risk_score"], 8.0
+    )
+    cell_agg["abs_risk_score"] = cell_agg["abs_risk_score"].round(1)
+
+    # -- Merge back to grid (default = 1: no boreholes = no known risk) ---
+    grid = grid.copy()
+    grid["abs_risk_score"] = 1.0
+    grid.loc[cell_agg.index, "abs_risk_score"] = cell_agg["abs_risk_score"]
+
+    hi = (grid["abs_risk_score"] >= 7).sum()
+    log.info(
+        f"  abs_risk_score: min={grid['abs_risk_score'].min():.1f} "
+        f"max={grid['abs_risk_score'].max():.1f}  high-risk cells (≥7): {hi:,}"
+    )
+    return grid
 
 
 def run():
@@ -117,6 +250,15 @@ def run():
 
     grid = dummy_need_score(grid, gwmu)
     grid = dummy_water_score(grid)
+
+    # ------------------------------------------------------------------
+    # 6c. GW Abstractions at Risk (1.3) — real data
+    # ------------------------------------------------------------------
+    if _ABS_FILE.exists():
+        grid = score_abs_risk(grid, boundary)
+    else:
+        log.warning(f"Abstractions file not found: {_ABS_FILE} — abs_risk_score set to 1.0")
+        grid["abs_risk_score"] = 1.0
 
     # ------------------------------------------------------------------
     # 6b. SDTM infiltration score
@@ -215,19 +357,20 @@ def run():
     _grid_3857 = grid.to_crs(3857)
     _bounds = _grid_3857.geometry.bounds
     hover_df = pd.DataFrame({
-        "x0":          _bounds["minx"].values,
-        "y0":          _bounds["miny"].values,
-        "x1":          _bounds["maxx"].values,
-        "y1":          _bounds["maxy"].values,
-        "geo_score":   grid["geo_score"].round(1).values,
-        "need_score":  grid["need_score"].round(1).values,
-        "water_score": grid["water_score"].round(1).values,
-        "sdtm_score":  grid["sdtm_score"].round(1).values,
-        "sdtm_mean_m": grid["sdtm_mean_m"].round(1).values,
-        "aquifer":     grid["hydro_character"].values,
-        "gwmu":        grid["gwmu_name"].values,
-        "gwm_name":    grid["gwm_name"].values,
-        "constraint":  grid["constraint_mask"].values,
+        "x0":             _bounds["minx"].values,
+        "y0":             _bounds["miny"].values,
+        "x1":             _bounds["maxx"].values,
+        "y1":             _bounds["maxy"].values,
+        "geo_score":      grid["geo_score"].round(1).values,
+        "need_score":     grid["need_score"].round(1).values,
+        "abs_risk_score": grid["abs_risk_score"].round(1).values,
+        "water_score":    grid["water_score"].round(1).values,
+        "sdtm_score":     grid["sdtm_score"].round(1).values,
+        "sdtm_mean_m":    grid["sdtm_mean_m"].round(1).values,
+        "aquifer":        grid["hydro_character"].values,
+        "gwmu":           grid["gwmu_name"].values,
+        "gwm_name":       grid["gwm_name"].values,
+        "constraint":     grid["constraint_mask"].values,
     })
     hover_df.to_csv(out_dir / "hover_base.csv", index=False)
     log.info("Hover data saved → processed/hover_base.csv")
