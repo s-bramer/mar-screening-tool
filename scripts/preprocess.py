@@ -58,8 +58,6 @@ _ABS_FILE         = cfg_mod.ROOT / "data" / "MAR-ST_SourceData.xlsx"
 _ABS_COL_SITE     = "Site"                          # PTSST / Non-PTSST join key
 _ABS_COL_ADO      = "ADO PR24"                      # Deployable Output at PR24 [Ml/d]
 _ABS_COL_RA       = "15 yr RA  Average (2009-2023)" # Recent Actual [Ml/d]
-_ABS_COL_NDB      = "NDB (average 2001-2015)"       # Natural Die-back [Ml/d]
-_ABS_COL_LICENCE  = "Daily Annual/365 Licence (Ml/d)"
 _BH_COL_SITE      = "Site_Name"                     # BoreholeDetails join key
 _BH_COL_EAST      = "Easting"                       # BNG easting  — CONFIRM column name
 _BH_COL_NORTH     = "Northing"                      # BNG northing — CONFIRM column name
@@ -79,39 +77,31 @@ def score_abs_risk(grid: gpd.GeoDataFrame, boundary: gpd.GeoDataFrame) -> gpd.Ge
     2. Compute per-site centroid (mean BNG of all boreholes) and join
        abstraction metrics.  Centroid approach avoids double-counting at
        1 km resolution where multi-borehole sites typically sit in one cell.
-    3. Reduction [Ml/d] = max(0, Daily_Licence − ADO_PR24).
-    4. Flag over-abstracting sites: Recent_Actual > ADO_PR24.
-    5. Spatial join sites → grid cells; sum reduction per cell.
-    6. Score piecewise-linear on summed reduction; override to ≥ 8 for any
-       cell containing an over-abstracting site.
+    3. Reduction [Ml/d] = max(0, RA − ADO_PR24).
+       Uses Recent Actual abstraction (15-yr average) rather than licensed
+       volume — reflects operational demand actually at risk of reduction.
+    4. Spatial join sites → grid cells; sum reduction per cell.
+    5. Score piecewise-linear on summed reduction.
     """
     log.info("=== GW Abstractions at Risk (1.3) ===")
 
     # -- Load abstraction tables ------------------------------------------
-    abs_cols = [_ABS_COL_SITE, _ABS_COL_ADO, _ABS_COL_RA,
-                _ABS_COL_NDB, _ABS_COL_LICENCE]
+    abs_cols = [_ABS_COL_SITE, _ABS_COL_ADO, _ABS_COL_RA]
     ptsst     = pd.read_excel(_ABS_FILE, sheet_name="PTSST",     usecols=abs_cols)
     non_ptsst = pd.read_excel(_ABS_FILE, sheet_name="Non-PTSST", usecols=abs_cols)
     abstractions = pd.concat([ptsst, non_ptsst], ignore_index=True)
 
     n_raw = len(abstractions)
-    abstractions = abstractions.dropna(
-        subset=[_ABS_COL_SITE, _ABS_COL_ADO, _ABS_COL_LICENCE]
-    )
-    log.info(f"  Abstraction rows: {n_raw} loaded, {len(abstractions)} with ADO + licence")
+    abstractions = abstractions.dropna(subset=[_ABS_COL_SITE, _ABS_COL_ADO, _ABS_COL_RA])
+    log.info(f"  Abstraction rows: {n_raw} loaded, {len(abstractions)} with RA + ADO")
 
-    # -- Per-site risk metrics --------------------------------------------
+    # -- Per-site reduction: max(0, RA − ADO_PR24) ------------------------
     abstractions["reduction_mld"] = np.maximum(
-        0.0, abstractions[_ABS_COL_LICENCE] - abstractions[_ABS_COL_ADO]
-    )
-    abstractions["overabstracting"] = (
-        abstractions[_ABS_COL_RA].notna() &
-        (abstractions[_ABS_COL_RA] > abstractions[_ABS_COL_ADO])
+        0.0, abstractions[_ABS_COL_RA] - abstractions[_ABS_COL_ADO]
     )
 
     n_at_risk = (abstractions["reduction_mld"] > 0).sum()
-    n_over    = abstractions["overabstracting"].sum()
-    log.info(f"  Sites with reduction > 0: {n_at_risk}  |  over-abstracting: {n_over}")
+    log.info(f"  Sites with RA > ADO (at risk): {n_at_risk} of {len(abstractions)}")
 
     # -- Load borehole locations; compute site centroids ------------------
     bh = pd.read_excel(
@@ -148,7 +138,7 @@ def score_abs_risk(grid: gpd.GeoDataFrame, boundary: gpd.GeoDataFrame) -> gpd.Ge
 
     # -- Spatial join: site point → grid cell -----------------------------
     joined = gpd.sjoin(
-        sites_gdf[["reduction_mld", "overabstracting", "geometry"]],
+        sites_gdf[["reduction_mld", "geometry"]],
         grid[["geometry"]],
         how="inner",
         predicate="within",
@@ -157,18 +147,12 @@ def score_abs_risk(grid: gpd.GeoDataFrame, boundary: gpd.GeoDataFrame) -> gpd.Ge
     # -- Aggregate per cell -----------------------------------------------
     cell_agg = joined.groupby("index_right").agg(
         total_reduction=("reduction_mld", "sum"),
-        n_overabstracting=("overabstracting", "sum"),
     )
 
     # -- Score ------------------------------------------------------------
     cell_agg["abs_risk_score"] = np.interp(
         cell_agg["total_reduction"].values, _ABS_SCORE_X, _ABS_SCORE_Y
-    )
-    over_mask = cell_agg["n_overabstracting"] > 0
-    cell_agg.loc[over_mask, "abs_risk_score"] = np.maximum(
-        cell_agg.loc[over_mask, "abs_risk_score"], 8.0
-    )
-    cell_agg["abs_risk_score"] = cell_agg["abs_risk_score"].round(1)
+    ).round(1)
 
     # -- Merge back to grid (default = 1: no boreholes = no known risk) ---
     grid = grid.copy()

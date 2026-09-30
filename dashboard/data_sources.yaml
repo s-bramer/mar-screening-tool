@@ -29,6 +29,7 @@ themes:
           Distance from each cell centre to nearest GWDTE polygon.
           Cells overlapping a GWDTE are hard-excluded from scoring (constraint = 0).
           Nearby cells (< 2 km) scored higher for Environmental Destination objective.
+          **Add prioritisation in phase 2**
         scoring: "Proximity distance → 0–10. TBC."
         notes: "Placeholder dummy values used. GWDTEs currently used as hard constraint only."
 
@@ -49,18 +50,15 @@ themes:
         source: "EA WRGIS - Groundwater Abstractions (file: ***MAR-ST_SourceData.xlsx***)"
         licence: "supplied by AG (OGL v3?)"
         date_accessed: "TBC"
-        key_field: "Reduction = max(0, Annual Licence / 365 − 'ADO PR24') [Ml/d per well]"
-        gridding:
-          Wells spatial joined to 1 km grid cell.
-          Reduction values are summed for all wells within each cell.
-        scoring:
-          Scored according to potential size of abstraction reduction.
-          Summed reduction normalised to 0-10 score (TBC).
-            0          →  1  (no risk)
-            0–5        →  3–4
-            5–10       →  5–7
-            >10        →  8–10  (highest risk).
-        notes: "Placeholder dummy values used. **NOTE: Add check for over-abstracting wells (RA>ADO) → Highest Risk assigned and NDB check.**"
+        key_field: "Reduction = max(0, 15-yr RA Average − ADO PR24) [Ml/d per site]"
+        gridding: >
+          Site centroids (mean BNG of all boreholes per site) spatially joined
+          to 1 km grid cells. Reduction values summed for all sites within each cell.
+        scoring: |
+          Piecewise linear on summed cell reduction [Ml/d]:
+          0 Ml/d → 1,  0.1 → 3,  1 → 5,  5 → 8,  ≥10 → 10.
+          Uses Recent Actual abstraction (15-yr avg, 2009–2023) vs ADO PR24 = operational demand at risk.
+        notes: "Placeholder dummy values used."
     
       - name: "CAMS Ledger Deficit  [AWB]"
         sidebar_slider: "1.4  CAMS Ledger Deficit  [AWB]"
@@ -90,11 +88,22 @@ themes:
         scoring: "Proximity → 0–10. TBC."
         notes: "Placeholder dummy values used."
 
-      - name: "WRMP WRZ BL supply demand balance"
+      - name: "WRMP WRZ BL supply demand balance/PWS needs"
         sidebar_slider: "TBC"
         status: placeholder
         source: "Supplied by ST: ***final-WRMP24-tables-Redacted-v2.xlsx*** and Water_Resource_Zones geopackage"
         licence: "Client data - distribution restricted?"
+        date_accessed: "TBC"
+        key_field: "TBC"
+        gridding: "TBC"
+        scoring: "TBC"
+        notes: "Not in dashboard yet."
+
+      - name: "Wider water supply (agriculture / industrial clusters)"
+        sidebar_slider: "TBC"
+        status: placeholder
+        source: "Use EA CAMS data ***WRGISMay26.xlsx***"
+        licence: "Client data - - OFFICIAL SENSITIVE?"
         date_accessed: "TBC"
         key_field: "TBC"
         gridding: "TBC"
@@ -171,7 +180,7 @@ themes:
         scoring: |
           Optimum range: 3–15 m (accessible for borehole; unsaturated for infiltration)
           0–3 m → 2,  3–8 m → 7,  8–15 m → 10,  15–25 m → 9,  25–40 m → 5,  >40 m → 2
-        notes: "Placeholder dummy values used. **NOTE: Add Aquifer Thickness and Aquifer Properties (using GWMs)**"
+        notes: "Placeholder dummy values used. <br> **NOTE: Add Aquifer Thickness and Aquifer Properties (using GWMs)**"
 
       - name: "Surface Geology  [infiltration]"
         sidebar_slider: "2.5  Surface Geology  [infiltration]"
