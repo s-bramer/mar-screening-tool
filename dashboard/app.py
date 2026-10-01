@@ -46,6 +46,7 @@ pn.extension("plotly", throttled=True)
 hv.extension("bokeh")
 
 
+
 # ---------------------------------------------------------------------------
 # Config
 # ---------------------------------------------------------------------------
@@ -78,6 +79,18 @@ _SUB_SLIDER_PLACEHOLDER_SS = ["""
         font-size: 11.5px !important;
         font-weight: 400 !important;
         color: #c0392b !important;
+    }
+"""]
+_CHECKBOX_SS = ["""
+    :host {
+        --type-ramp-base-font-size: 11.5px;
+        color: #55687a;
+    }
+"""]
+_CHECKBOX_DISABLED_SS = ["""
+    :host {
+        --type-ramp-base-font-size: 11.5px;
+        color: #b0bec5;
     }
 """]
 
@@ -337,36 +350,6 @@ def _load_all() -> dict:
         sg_base + 1.2 * rng.standard_normal(n), 1.0, 10.0
     ).round(1)
 
-    feasible_base = cells[cells["constraint"] == 1][[
-        "x0", "y0", "x1", "y1",
-        "geo_score", "need_score", "water_score",
-        "sdtm_score", "sdtm_mean_m",
-        "slope_score", "depth_water_score", "depth_water_m", "surf_geo_score",
-        "aquifer", "gwmu", "gwm_name",
-    ]].copy().reset_index(drop=True)
-
-    excl = cells[cells["constraint"] == 0][
-        ["x0", "y0", "x1", "y1", "geo_score", "aquifer", "gwmu"]
-    ].copy().reset_index(drop=True)
-    excl["reason"] = np.where(
-        excl["geo_score"] == 0, "Non-productive aquifer", "GWDTE",
-    )
-
-    HOVER_EXCL = HoverTool(tooltips=[
-        ("GWMU",        "@gwmu"),
-        ("Aquifer",     "@aquifer"),
-        ("Geo Score",   "@geo_score{0.0}"),
-        ("──────────", ""),
-        ("Excluded:",   "@reason"),
-    ])
-    EXCL_RECTS = hv.Rectangles(
-        excl,
-        kdims=["x0", "y0", "x1", "y1"],
-        vdims=["geo_score", "aquifer", "gwmu", "reason"],
-    ).opts(opts.Rectangles(
-        color="#de1212", fill_alpha=0.40, line_alpha=0, tools=[HOVER_EXCL],
-    ))
-
     bnd  = _gpkg("boundary_3857")
     gwmu = _gpkg("gwmu_3857")
     gwm  = _gpkg("gwm_3857")
@@ -401,8 +384,6 @@ def _load_all() -> dict:
 
     return dict(
         CELLS=cells,
-        FEASIBLE_BASE=feasible_base,
-        EXCL_RECTS=EXCL_RECTS,
         TILE_BASE=TILE_BASE,
         L_BOUNDARY=L_BOUNDARY,
         L_GWMU=L_GWMU,
@@ -413,12 +394,20 @@ def _load_all() -> dict:
 try:
     _d = _load_all()
     CELLS         = _d["CELLS"]
-    FEASIBLE_BASE = _d["FEASIBLE_BASE"]
-    EXCL_RECTS    = _d["EXCL_RECTS"]
     TILE_BASE     = _d["TILE_BASE"]
     L_BOUNDARY    = _d["L_BOUNDARY"]
     L_GWMU        = _d["L_GWMU"]
     L_GWM         = _d["L_GWM"]
+    # Individual constraint columns — added to hover_base.csv when preprocessing
+    # is re-run with updated mce.py.  Derive from existing data if missing so the
+    # dashboard works without a preprocess rerun (and survives @pn.cache hits).
+    if "c_nonprod" not in CELLS.columns:
+        CELLS["c_nonprod"] = np.where(
+            (CELLS["constraint"] == 0) & (CELLS["geo_score"] <= 0.0), 0, 1
+        )
+        CELLS["c_gwdte"] = np.where(
+            (CELLS["constraint"] == 0) & (CELLS["geo_score"] > 0.0), 0, 1
+        )
     DATA_LOADED = True
 except FileNotFoundError as e:
     DATA_LOADED = False
@@ -553,15 +542,38 @@ w_surf_geo    = pn.widgets.FloatSlider(
     stylesheets=_ph, margin=(5, 10, 5, 10))
 
 # ── Water Availability sub-criteria (dummy - data pending) ────────────────
-w_water_storm = pn.widgets.FloatSlider(
-    name="3.1  Storm Water at Network Points  [DWMP]", value=0.33, start=0, end=1, step=0.01,
+w_water_storm  = pn.widgets.FloatSlider(
+    name="3.1  Storm Water at Network Points  [DWMP]", value=0.25, start=0, end=1, step=0.01,
     stylesheets=_ph, margin=(5, 10, 5, 10))
-w_water_drink = pn.widgets.FloatSlider(
-    name="3.2  Drinking Water Availability",            value=0.33, start=0, end=1, step=0.01,
+w_water_drink  = pn.widgets.FloatSlider(
+    name="3.2  Drinking Water Availability",            value=0.25, start=0, end=1, step=0.01,
     stylesheets=_ph, margin=(5, 10, 5, 10))
-w_water_tww   = pn.widgets.FloatSlider(
-    name="3.3  Treated Waste Water  (WwTW proximity)", value=0.34, start=0, end=1, step=0.01,
+w_water_tww    = pn.widgets.FloatSlider(
+    name="3.3  Treated Waste Water  (WwTW proximity)", value=0.25, start=0, end=1, step=0.01,
     stylesheets=_ph, margin=(5, 10, 5, 10))
+w_water_river  = pn.widgets.FloatSlider(
+    name="3.4  River Water  (untreated)",               value=0.25, start=0, end=1, step=0.01,
+    stylesheets=_ph, margin=(5, 10, 5, 10))
+
+# ── Hard constraint toggles ───────────────────────────────────────────────
+c_nonprod_chk = pn.widgets.Checkbox(
+    name="Non-productive aquifer", value=True,
+    stylesheets=_CHECKBOX_SS, margin=(3, 10, 3, 10))
+c_gwdte_chk   = pn.widgets.Checkbox(
+    name="GWDTE overlap", value=True,
+    stylesheets=_CHECKBOX_SS, margin=(3, 10, 3, 10))
+c_sw_land_chk = pn.widgets.Checkbox(
+    name="Land use — surface water  [coming soon]", value=False,
+    disabled=True, stylesheets=_CHECKBOX_DISABLED_SS, margin=(3, 10, 3, 10))
+c_flood_chk   = pn.widgets.Checkbox(
+    name="Surface water flood risk  [coming soon]", value=False,
+    disabled=True, stylesheets=_CHECKBOX_DISABLED_SS, margin=(3, 10, 3, 10))
+c_contam_chk  = pn.widgets.Checkbox(
+    name="Contaminated land / landfill  [coming soon]", value=False,
+    disabled=True, stylesheets=_CHECKBOX_DISABLED_SS, margin=(3, 10, 3, 10))
+c_spz_chk     = pn.widgets.Checkbox(
+    name="Source Protection Zone SPZ1  [coming soon]", value=False,
+    disabled=True, stylesheets=_CHECKBOX_DISABLED_SS, margin=(3, 10, 3, 10))
 
 _INFIL_ONLY_WIDGETS = [w_sdtm, w_slope, w_surf_geo]
 
@@ -861,7 +873,7 @@ if not DATA_LOADED:
 
 else:
     # -----------------------------------------------------------------------
-    # Column map: colour_by selector → column in FEASIBLE_BASE
+    # Column map: colour_by selector → column in CELLS
     # -----------------------------------------------------------------------
     _COL_MAP = {
         "composite_score":   "composite",
@@ -916,10 +928,18 @@ else:
                 "depth_water_score", "surf_geo_score"}
 
     def _build_map(w_n, w_g, w_w, w_aq, w_sd, w_sl, w_dw, w_sg,
-                   layers, col_by, method, objective):
+                   layers, col_by, method, objective,
+                   c_nonprod_on, c_gwdte_on):
         total = (w_n + w_g + w_w) or 1.0
 
-        feasible = FEASIBLE_BASE.copy()
+        # Build combined constraint mask from active toggles
+        feas_mask = np.ones(len(CELLS), dtype=bool)
+        if c_nonprod_on:
+            feas_mask &= (CELLS["c_nonprod"].values == 1)
+        if c_gwdte_on:
+            feas_mask &= (CELLS["c_gwdte"].values == 1)
+
+        feasible = CELLS[feas_mask].copy().reset_index(drop=True)
         feasible["geo_composite"] = _compute_geo_composite(
             feasible, method, w_aq, w_sd, w_sl, w_dw, w_sg,
         ).round(1)
@@ -929,6 +949,33 @@ else:
              + w_w / total * feasible["water_score"]),
             0, 10,
         ).round(1)
+
+        # Build excluded-cells layer dynamically
+        excl_df = CELLS[~feas_mask][
+            ["x0", "y0", "x1", "y1", "geo_score", "aquifer", "gwmu",
+             "c_nonprod", "c_gwdte"]
+        ].copy().reset_index(drop=True)
+        excl_df["reason"] = np.select(
+            [
+                (excl_df["c_nonprod"] == 0) & (excl_df["c_gwdte"] == 0),
+                excl_df["c_nonprod"] == 0,
+            ],
+            ["Non-productive aquifer + GWDTE", "Non-productive aquifer"],
+            default="GWDTE",
+        )
+        _hover_excl = HoverTool(tooltips=[
+            ("GWMU",        "@gwmu"),
+            ("Aquifer",     "@aquifer"),
+            ("──────────", ""),
+            ("Excluded:",   "@reason"),
+        ])
+        excl_rects = hv.Rectangles(
+            excl_df,
+            kdims=["x0", "y0", "x1", "y1"],
+            vdims=["geo_score", "aquifer", "gwmu", "reason"],
+        ).opts(opts.Rectangles(
+            color="#de1212", fill_alpha=0.40, line_alpha=0, tools=[_hover_excl],
+        ))
 
         score_col = _COL_MAP[col_by]
         sel_lbl   = _SEL_LABEL.get(col_by, "Selected Score")
@@ -969,7 +1016,7 @@ else:
         ))
 
         plot = TILE_BASE
-        if "Excluded Cells"   in layers: plot = plot * EXCL_RECTS
+        if "Excluded Cells"   in layers: plot = plot * excl_rects
         if "Suitability Grid" in layers: plot = plot * rects
         if "GW Mgmt Units"    in layers: plot = plot * L_GWMU
         if "GW Models"        in layers: plot = plot * L_GWM
@@ -993,6 +1040,7 @@ else:
             w_aquifer, w_sdtm, w_slope, w_depth_water, w_surf_geo,
             layer_checks, colour_by,
             mar_method_sel, mar_objective,
+            c_nonprod_chk, c_gwdte_chk,
         ),
         sizing_mode="stretch_both",
     )
@@ -1001,8 +1049,15 @@ else:
     # Stats panel
     # -----------------------------------------------------------------------
 
-    def _stats(w_n, w_g, w_w, w_aq, w_sd, w_sl, w_dw, w_sg, method):
+    def _stats(w_n, w_g, w_w, w_aq, w_sd, w_sl, w_dw, w_sg, method,
+               c_nonprod_on, c_gwdte_on):
         total = (w_n + w_g + w_w) or 1.0
+
+        feas_mask = np.ones(len(CELLS), dtype=bool)
+        if c_nonprod_on:
+            feas_mask &= (CELLS["c_nonprod"].values == 1)
+        if c_gwdte_on:
+            feas_mask &= (CELLS["c_gwdte"].values == 1)
 
         geo_comp = _compute_geo_composite(CELLS, method, w_aq, w_sd, w_sl, w_dw, w_sg)
 
@@ -1010,12 +1065,11 @@ else:
             (w_n / total * CELLS["need_score"].values
              + w_g / total * geo_comp
              + w_w / total * CELLS["water_score"].values)
-            * CELLS["constraint"].values,
+            * feas_mask.astype(float),
             0, 10,
         )
-        mask     = CELLS["constraint"].values == 1
-        feasible = composite[mask]
-        excl     = int((~mask).sum())
+        feasible = composite[feas_mask]
+        excl     = int((~feas_mask).sum())
         hi       = int((feasible >= 7).sum())
         med      = int(((feasible >= 4) & (feasible < 7)).sum())
         lo       = int((feasible < 4).sum())
@@ -1043,6 +1097,7 @@ else:
             w_need, w_geo, w_water,
             w_aquifer, w_sdtm, w_slope, w_depth_water, w_surf_geo,
             mar_method_sel,
+            c_nonprod_chk, c_gwdte_chk,
         )
     )
 
@@ -1111,11 +1166,28 @@ else:
         margin=(0, 5, 8, 5),
     )
     _water_card = pn.Card(
-        w_water_storm, w_water_drink, w_water_tww,
+        w_water_storm, w_water_drink, w_water_tww, w_water_river,
         title=_card_title,
         collapsed=True, collapsible=True,
         sizing_mode="stretch_width",
         styles=_card_styles("#e67e22"),
+        stylesheets=_card_ss,
+        margin=(0, 5, 8, 5),
+    )
+
+    _constraint_card_title = (
+        "<span style='font-size:13px;font-weight:400;color:#3d5a73;"
+        "letter-spacing:0.04em'>"
+        "▸  Active constraints</span>"
+    )
+    _constraint_card = pn.Card(
+        c_nonprod_chk, c_gwdte_chk,
+        pn.layout.Divider(margin=(4, 0, 4, 0)),
+        c_sw_land_chk, c_flood_chk, c_contam_chk, c_spz_chk,
+        title=_constraint_card_title,
+        collapsed=True, collapsible=True,
+        sizing_mode="stretch_width",
+        styles=_card_styles("#c0392b"),
         stylesheets=_card_ss,
         margin=(0, 5, 8, 5),
     )
@@ -1156,6 +1228,15 @@ else:
 
         w_water,
         _water_card,
+        _div(),
+
+        # ── Hard Constraints ──────────────────────────────────────────────
+        _sh("Constraints"),
+        pn.pane.Markdown(
+            "_Cell with contraints will get a score of 0._",
+            styles=_hint, margin=(0, 0, 2, 0),
+        ),
+        _constraint_card,
         _div(),
 
         # ── Display ───────────────────────────────────────────────────────

@@ -355,6 +355,8 @@ def run():
         "gwmu":           grid["gwmu_name"].values,
         "gwm_name":       grid["gwm_name"].values,
         "constraint":     grid["constraint_mask"].values,
+        "c_nonprod":      grid["c_nonprod"].values,
+        "c_gwdte":        grid["c_gwdte"].values,
     })
     hover_df.to_csv(out_dir / "hover_base.csv", index=False)
     log.info("Hover data saved → processed/hover_base.csv")

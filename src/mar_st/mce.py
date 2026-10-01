@@ -55,22 +55,32 @@ def apply_constraints(
     gwdte: gpd.GeoDataFrame | None = None,
 ) -> gpd.GeoDataFrame:
     """
-    Build a binary constraint_mask column (1 = feasible, 0 = excluded).
-    Constraints are applied cumulatively; a cell excluded by any one constraint
-    stays excluded.
+    Build constraint columns:
+      c_nonprod, c_gwdte  — per-constraint binary flags (1=feasible, 0=excluded)
+      constraint_mask     — combined AND of all active constraints
+    Individual columns allow the dashboard to toggle each constraint independently.
     """
     grid = grid.copy()
+    grid["c_nonprod"]       = 1
+    grid["c_gwdte"]         = 1
     grid["constraint_mask"] = 1
 
     if cfg["constraints"].get("exclude_non_productive") and hydrogeology is not None:
         non_prod = hydrogeology[
             hydrogeology["CHARACTER"] == "Rocks with essentially no groundwater"
         ].copy()
-        grid = exclude_by_overlap(grid, non_prod, "non-productive aquifer")
+        _tmp = grid[["cell_id", "geometry"]].copy()
+        _tmp["constraint_mask"] = 1
+        _tmp = exclude_by_overlap(_tmp, non_prod, "non-productive aquifer")
+        grid["c_nonprod"] = _tmp["constraint_mask"].values
 
     if cfg["constraints"].get("exclude_gwdte") and gwdte is not None:
-        grid = exclude_by_overlap(grid, gwdte, "GWDTE")
+        _tmp = grid[["cell_id", "geometry"]].copy()
+        _tmp["constraint_mask"] = 1
+        _tmp = exclude_by_overlap(_tmp, gwdte, "GWDTE")
+        grid["c_gwdte"] = _tmp["constraint_mask"].values
 
+    grid["constraint_mask"] = grid["c_nonprod"] & grid["c_gwdte"]
     total_excluded = (grid["constraint_mask"] == 0).sum()
     log.info(f"Constraints applied — {total_excluded:,} cells excluded in total")
     return grid
