@@ -42,7 +42,7 @@ themes:
         key_field: "Priority Bracket (Very Low / Low / Medium / High) per water body"
         gridding: "Spatial join of water body score to grid."
         scoring: "Prioritisation score based on EDM12 method (Motts) as part of the ED project."
-        notes: "Placeholder dummy values used. **NOTE: All WB's score High Priority. Use EDM12 score values to grade?**"
+        notes: "Placeholder dummy values used."
 
       - name: "GW Abstractions at Risk  [ED]"
         sidebar_slider: "1.3  GW Abstractions at Risk  [ED]"
@@ -73,16 +73,38 @@ themes:
           Surplus (Ml/d): Breakpoints TBC.
         notes: "Placeholder dummy values used."
 
-      - name: "CSO / WwTW Proximity  [DWMP]"
-        sidebar_slider: "1.5  CSO / WwTW Proximity  [DWMP]"
+      - name: "CSO Overflow Proximity  [DWMP]"
+        sidebar_slider: "1.5  CSO Overflow Proximity  [DWMP]"
         status: placeholder
-        source: "Supplied by ST: SVE_SOAP_2025 location of CSO's and ***pDWF Breach Forecast Quality Permit Constraints v1.xlsx***"
-        licence: "Client data - distribution restricted?"
-        date_accessed: "TBC"
-        key_field: "Point locations; proximity calculated at preprocessing"
-        gridding: "Distance from cell centroid to nearest CSO / WwTW point."
-        scoring: "Proximity → 0–10. TBC."
-        notes: "Placeholder dummy values used. **NOTE: COMBINED or SEPARATE??**"
+        source: "Supplied by ST: ***SVE - SOAP - July 25.xlsx***"
+        licence: "Client data - distribution restricted"
+        date_accessed: "July 2025"
+        key_field: |
+          CSO point location (Easting/Northing);
+          Year overflow expected;
+          AMP period in which ST plans to address (AMP8 / AMP9)
+        gridding: >
+          Distance from each 1 km cell centroid to nearest CSO point.
+          Scoring weighted by overflow urgency: earlier → higher weight;
+        scoring: "Proximity × AMP urgency weight → 0–10. Breakpoints TBC."
+        notes: "Placeholder dummy values used."
+
+      - name: "WwTW / pDWF Breach Proximity  [DWMP]"
+        sidebar_slider: "1.6  WwTW / pDWF Proximity  [DWMP]"
+        status: placeholder
+        source: |
+          (A) Supplied by ST: ***pDWF Breach Forecast Quality Permit Constraints v1.xlsx*** — WwTW locations with predicted DWF breach year and permit limit.
+          (B) Waste-water network modelling subcatchment polygons (***523-156_subcatchment.csv*** → processed/dwmp.gpkg, layer: subcatchment).
+        licence: "Client data - distribution restricted"
+        date_accessed: "2025"
+        key_field: |
+          (A) WwTW point location; predicted breach year; permit DWF limit [Ml/d]
+          (B) Subcatchment polygons draining to each WwTW node (node_id → drains_to)
+        gridding: >
+          Spatial join of WwTW points to 1 km grid cells.
+          Priority weighted by permit breach urgency (earlier breach → higher score).
+        scoring: "Proximity × breach urgency weight → 0–10. Breakpoints TBC."
+        notes: "Placeholder dummy values used. Subcatchment layer available in processed/dwmp.gpkg."
 
       - name: "WRMP WRZ BL supply demand balance/PWS needs"
         sidebar_slider: "TBC"

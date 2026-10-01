@@ -521,7 +521,10 @@ w_need_cams     = pn.widgets.FloatSlider(
     name="1.4  CAMS Ledger Deficit  [AWB]",         value=0.20, start=0, end=1, step=0.01,
     stylesheets=_ph, margin=(5, 10, 5, 10))
 w_need_cso      = pn.widgets.FloatSlider(
-    name="1.5  CSO / WwTW Proximity  [DWMP]",       value=0.20, start=0, end=1, step=0.01,
+    name="1.5  CSO Overflow Proximity  [DWMP]",      value=0.15, start=0, end=1, step=0.01,
+    stylesheets=_ph, margin=(5, 10, 5, 10))
+w_need_wwtw_prox = pn.widgets.FloatSlider(
+    name="1.6  WwTW / pDWF Proximity  [DWMP]",      value=0.10, start=0, end=1, step=0.01,
     stylesheets=_ph, margin=(5, 10, 5, 10))
 
 # ── Geological sub-criteria (real BGS data for aquifer + SDTM) ───────────
@@ -777,6 +780,47 @@ def _build_data_sources_tab() -> pn.Column:
             ))
 
         rows.append(pn.layout.Divider())
+
+    # ── Hard Constraints ──────────────────────────────────────────────────────
+    rows.append(pn.pane.Markdown("## Hard Constraints", stylesheets=_h1,
+                                  sizing_mode="stretch_width"))
+    rows.append(pn.pane.Markdown(
+        "_Cells intersecting these layers are hard-excluded (score = 0) regardless of MCE weights. "
+        "Active constraints are toggled via checkboxes in the sidebar._",
+        styles={"color": "#555", "font-size": "0.83em"},
+        sizing_mode="stretch_width",
+    ))
+
+    for i_con, con in enumerate(ds.get("constraints", []), 1):
+        label, colour = _STATUS_BADGE.get(
+            con.get("status", "coming_soon"), ("?", "#888")
+        )
+        badge = (
+            f"<span style='background:{colour};color:white;"
+            f"padding:1px 7px;border-radius:3px;font-size:0.78em;"
+            f"font-weight:600;margin-left:6px'>{label}</span>"
+        )
+        md_lines = [f"### C.{i_con}  {con['name']} {badge}"]
+        if con.get("dashboard_toggle"):
+            md_lines.append(f"_Dashboard toggle: **{con['dashboard_toggle']}**_")
+        md_lines.append("")
+        for k, v in [("Source", con.get("source")),
+                     ("Licence", con.get("licence")),
+                     ("Accessed", con.get("date_accessed")),
+                     ("Key field", con.get("key_field")),
+                     ("Notes", con.get("notes"))]:
+            if v:
+                md_lines.append(_format_field(k, v))
+
+        rows.append(pn.pane.Markdown(
+            "\n".join(md_lines),
+            stylesheets=_h2,
+            sizing_mode="stretch_width",
+            styles={"border-left": "3px solid #c0392b",
+                    "padding-left": "10px", "margin": "6px 0 10px 0"},
+        ))
+
+    rows.append(pn.layout.Divider())
 
     # ── Overlay layers ────────────────────────────────────────────────────────
     rows.append(pn.pane.Markdown("## Overlay Layers", stylesheets=_h1,
@@ -1144,7 +1188,7 @@ else:
     )
 
     _need_card = pn.Card(
-        w_need_gwdte, w_need_sw_prio, w_need_abs_risk, w_need_cams, w_need_cso,
+        w_need_gwdte, w_need_sw_prio, w_need_abs_risk, w_need_cams, w_need_cso, w_need_wwtw_prox,
         title=_card_title,
         collapsed=True, collapsible=True,
         sizing_mode="stretch_width",
