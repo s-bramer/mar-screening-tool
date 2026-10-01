@@ -398,7 +398,7 @@ try:
     L_BOUNDARY    = _d["L_BOUNDARY"]
     L_GWMU        = _d["L_GWMU"]
     L_GWM         = _d["L_GWM"]
-    # Individual constraint columns — added to hover_base.csv when preprocessing
+    # Individual constraint columns - added to hover_base.csv when preprocessing
     # is re-run with updated mce.py.  Derive from existing data if missing so the
     # dashboard works without a preprocess rerun (and survives @pn.cache hits).
     if "c_nonprod" not in CELLS.columns:
@@ -563,7 +563,7 @@ c_gwdte_chk   = pn.widgets.Checkbox(
     name="GWDTE overlap", value=True,
     stylesheets=_CHECKBOX_SS, margin=(3, 10, 3, 10))
 c_sw_land_chk = pn.widgets.Checkbox(
-    name="Land use — surface water  [coming soon]", value=False,
+    name="Land use - surface water  [coming soon]", value=False,
     disabled=True, stylesheets=_CHECKBOX_DISABLED_SS, margin=(3, 10, 3, 10))
 c_flood_chk   = pn.widgets.Checkbox(
     name="Surface water flood risk  [coming soon]", value=False,
