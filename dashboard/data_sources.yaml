@@ -272,7 +272,7 @@ themes:
 
 
 constraints:
-  # Hard constraints — cells that intersect these layers are scored 0 regardless of MCE weights.
+  # Hard constraints - cells that intersect these layers are scored 0 regardless of MCE weights.
   # Active constraints are toggled on/off via checkboxes in the dashboard sidebar.
 
   - name: "Non-productive aquifer"
@@ -284,8 +284,7 @@ constraints:
     key_field: "CHARACTER = 'Rocks with essentially no groundwater'"
     notes: >
       Any 1 km grid cell whose dominant hydrogeology polygon is classified as
-      non-productive is hard-excluded. Column c_nonprod stored per cell in
-      hover_base.csv; toggled live in the dashboard.
+      non-productive is hard-excluded.
 
   - name: "GWDTE overlap"
     dashboard_toggle: "GWDTE overlap"
@@ -296,20 +295,17 @@ constraints:
     key_field: "Polygon presence/absence"
     notes: >
       Any 1 km grid cell that intersects a GWDTE polygon is hard-excluded.
-      Column c_gwdte stored per cell in hover_base.csv; toggled live in the dashboard.
 
-  - name: "Land use — surface water"
-    dashboard_toggle: "Land use — surface water  [coming soon]"
+  - name: "Land use - surface water"
+    dashboard_toggle: "Land use - surface water  [coming soon]"
     status: coming_soon
-    source: "TBC — OS OpenMap Local / EA Open Waterbodies (polygon layer)"
+    source: "TBC - OS OpenMap Local / EA Open Waterbodies (polygon layer)"
     licence: "TBC"
     date_accessed: "-"
     key_field: "Open water / waterbody polygon"
     notes: >
       Cells coinciding with inland surface water bodies (lakes, reservoirs, wide
-      river channels) are inappropriate for surface infiltration schemes. Requires
-      polygon waterbody dataset (linear OS Open Rivers centrelines are insufficient).
-      Not yet implemented — placeholder checkbox shown in dashboard.
+      river channels) are excluded.
 
   - name: "Surface water flood risk"
     dashboard_toggle: "Surface water flood risk  [coming soon]"
@@ -323,7 +319,7 @@ constraints:
   - name: "Contaminated land / landfill"
     dashboard_toggle: "Contaminated land / landfill  [coming soon]"
     status: coming_soon
-    source: "TBC — EA Landfill Register / Local Authority Contaminated Land records"
+    source: "TBC - EA Landfill Register / Local Authority Contaminated Land records"
     licence: "TBC"
     date_accessed: "-"
     key_field: "Polygon presence/absence"
@@ -337,7 +333,7 @@ constraints:
     date_accessed: "-"
     key_field: "Zone designation (SPZ1 / SPZ2 / SPZ3)"
     notes: >
-      SPZ1 (inner zone) — strictest protection; typically excludes infiltration MAR
+      SPZ1 (inner zone) - strictest protection; typically excludes infiltration MAR
       due to direct recharge risk to abstraction source. SPZ2/3 may allow MAR with
       mitigation. Constraint to apply SPZ1 only. Not yet implemented.
 
