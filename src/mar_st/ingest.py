@@ -146,20 +146,53 @@ def load_sw_catchments(cfg: dict, boundary: gpd.GeoDataFrame) -> gpd.GeoDataFram
     return clip_to_boundary(gdf, boundary)
 
 
-def load_superficial_thickness(cfg: dict, boundary: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
-    """Load BGS Superficial Deposits Thickness Model and clip to study boundary."""
+def load_sdtm_rasters(cfg: dict, grid: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
+    """
+    Aggregate BGS SDTM v8 TAM and DataDist rasters to the 1 km grid using zonal statistics.
+
+    Adds columns:
+      sdtm_mean_m      — zonal-mean TAM thickness per cell [m]; 0 where no deposits
+      sdtm_datadist_m  — zonal-mean DataDist per cell [m]; used as uncertainty proxy
+
+    TAM (Terrain Adjusted Model) is preferred over ODM because it incorporates
+    surface topography and better captures valley / floodplain deposits typical
+    of the ST supply area.  DataDist replaces COVER_PCT as the confidence weight:
+    smaller values (closer to a borehole or mapped boundary) = higher certainty.
+    """
+    from rasterstats import zonal_stats
+
     src_cfg = cfg["data_sources"]["superficial_thickness"]
-    gdf = load_layer(
-        src_cfg["path"],
-        layer=src_cfg.get("layer", "BGS_SDTM_1km_Coverage"),
+    nodata  = src_cfg.get("nodata", -999)
+
+    log.info(f"SDTM TAM  : zonal stats → {src_cfg['tam_path']}")
+    tam_stats = zonal_stats(
+        grid.geometry,
+        src_cfg["tam_path"],
+        stats=["mean"],
+        nodata=nodata,
+        all_touched=False,
     )
-    gdf = clip_to_boundary(gdf, boundary)
+
+    log.info(f"SDTM DataDist: zonal stats → {src_cfg['datadist_path']}")
+    dd_stats = zonal_stats(
+        grid.geometry,
+        src_cfg["datadist_path"],
+        stats=["mean"],
+        nodata=nodata,
+        all_touched=False,
+    )
+
+    grid = grid.copy()
+    grid["sdtm_mean_m"]     = [s["mean"] if s["mean"] is not None else 0.0 for s in tam_stats]
+    grid["sdtm_datadist_m"] = [s["mean"] if s["mean"] is not None else 0.0 for s in dd_stats]
+
+    n_with_deposits = (grid["sdtm_mean_m"] > 0).sum()
     log.info(
-        f"SDTM: {len(gdf)} hex cells clipped, "
-        f"BSTM_MEAN {gdf['BSTM_MEAN'].min():.1f}–{gdf['BSTM_MEAN'].max():.1f} m, "
-        f"COVER_PCT {gdf['COVER_PCT'].min():.2f}–{gdf['COVER_PCT'].max():.2f}"
+        f"SDTM: {n_with_deposits:,} cells with deposits, "
+        f"mean TAM {grid['sdtm_mean_m'][grid['sdtm_mean_m'] > 0].mean():.1f} m, "
+        f"mean DataDist {grid['sdtm_datadist_m'][grid['sdtm_datadist_m'] > 0].mean():.0f} m"
     )
-    return gdf
+    return grid
 
 
 def load_rivers(cfg: dict, boundary: gpd.GeoDataFrame) -> gpd.GeoDataFrame:

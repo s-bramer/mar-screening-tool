@@ -93,18 +93,19 @@ def apply_constraints(
 def score_sdtm(
     grid: gpd.GeoDataFrame,
     thickness_col: str = "sdtm_mean_m",
-    cover_col: str = "sdtm_cover_pct",
+    datadist_col: str = "sdtm_datadist_m",
     output_col: str = "sdtm_score",
     breakpoints_m: list | None = None,
     scores: list | None = None,
+    datadist_max_m: float = 2000.0,
 ) -> gpd.GeoDataFrame:
     """
     Score superficial deposits thickness for MAR infiltration suitability.
 
     Piecewise-linear between breakpoints; peaks at ~8 m (optimal filtration
-    depth for infiltration MAR). Score is then weighted by fractional cell
-    coverage (COVER_PCT), with a floor of 0.3 so sparsely-covered cells are
-    penalised but not zeroed.
+    depth for infiltration MAR). Score is weighted by BGS DataDist (inverse
+    distance to nearest observation): cells within datadist_max_m receive
+    full weight, those beyond receive a minimum weight of 0.3.
 
     Assumes all superficial deposits are permeable — revise once lithology
     (BGS 625K superficial geology) is integrated.
@@ -117,8 +118,10 @@ def score_sdtm(
     thickness = np.clip(grid[thickness_col].fillna(0).values, 0, breakpoints_m[-1])
     base = np.interp(thickness, breakpoints_m, scores)
 
-    cover = np.clip(grid[cover_col].fillna(0).values, 0, 1)
-    weight = 0.3 + 0.7 * cover
+    # Cells with no deposits (thickness=0) also have no DataDist → skip weighting
+    datadist  = grid[datadist_col].fillna(0).values
+    confidence = np.clip(1.0 - datadist / datadist_max_m, 0.0, 1.0)
+    weight = 0.3 + 0.7 * confidence
 
     grid = grid.copy()
     grid[output_col] = np.clip(base * weight, 0, 10).round(1)

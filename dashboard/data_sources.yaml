@@ -156,17 +156,27 @@ themes:
       - name: "SDTM Thickness  [infiltration]"
         sidebar_slider: "2.2  SDTM Thickness  [infiltration]"
         status: active
-        source: "BGS Superficial Deposits Thickness Model (SDTM) 1 km"
-        licence: "British Geological Survey (OGL v3)"
-        date_accessed: "2023"
-        key_field: "Mean SDTM thickness per 1 km cell [m]"
+        source: "BGS Superficial Deposits Thickness Model v8 — TAM (Terrain Adjusted Model), 50 m raster"
+        licence: "British Geological Survey (OGL v3) - received via ST licence"
+        date_accessed: "2025/2026"
+        key_field: |
+          sdtm_mean_m     — zonal-mean TAM thickness per 1 km cell [m]; 0 where no superficial deposits
+          sdtm_datadist_m — zonal-mean DataDist per 1 km cell [m]; distance to nearest borehole or mapped boundary (uncertainty indicator)
         gridding: >
-          BGS SDTM raster resampled/aggregated to 1 km cell mean thickness.
-          Cells with no superficial deposits assigned 0 m.
+          BGS SDTM v8 TAM raster (50 m, EPSG:27700) aggregated to 1 km grid (rasterstats zonal mean)
+          DataDist raster aggregated in the same way to derive a per-cell confidence weight.
+          Cells with no deposits (NoData in TAM) assigned 0 m.
         scoring: |
-          Linear interpolation (piecewise at points below) with optimal thickness ~2 m for infiltration (very thick deposits reduce infiltration rate):
-          0 m → 4,  0.5 m → 6,  2 m → 10,  6 m → 9,  15 m → 6,  30 m → 3
-        notes: "Disabled automatically for Borehole / ASR method."
+          Piecewise-linear scoring on TAM mean thickness [m]:
+            0 m → 4,  1 m → 5,  3 m → 8,  8 m → 10,  15 m → 8,  25 m → 4,  40 m → 2,  50 m → 1
+          Score is further weighted by DataDist confidence:
+            weight = 0.3 + 0.7 × max(0, 1 − DataDist / 2000)
+            — cells within 2 km of an observation: weight 0.3→1.0 (full score)
+            — cells >2 km from any observation: weight 0.3 (minimum score)
+        notes: >
+          Upgraded from BGS SDTM v5 1 km hex GeoPackage (field BSTM_MEAN) to SDTM v8 TAM 50 m raster.
+          RHEM layer (rockhead elevation mOD) also available — potential future use as depth-to-rockhead input.
+          Disabled automatically for Borehole / ASR method.
 
       - name: "Topography / Slope  [infiltration]"
         sidebar_slider: "2.3  Topography / Slope  [infiltration]"
