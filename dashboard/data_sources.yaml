@@ -93,7 +93,7 @@ themes:
         sidebar_slider: "1.6  WwTW / pDWF Proximity  [DWMP]"
         status: placeholder
         source: |
-          (A) Supplied by ST: ***pDWF Breach Forecast Quality Permit Constraints v1.xlsx*** — WwTW locations with predicted DWF breach year and permit limit.
+          (A) Supplied by ST: ***pDWF Breach Forecast Quality Permit Constraints v1.xlsx*** - WwTW locations with predicted DWF breach year and permit limit.
           (B) Waste-water network modelling subcatchment polygons (***523-156_subcatchment.csv*** → processed/dwmp.gpkg, layer: subcatchment).
         licence: "Client data - distribution restricted"
         date_accessed: "2025"
@@ -156,14 +156,14 @@ themes:
       - name: "SDTM Thickness  [infiltration]"
         sidebar_slider: "2.2  SDTM Thickness  [infiltration]"
         status: active
-        source: "BGS Superficial Deposits Thickness Model v8 — TAM (Terrain Adjusted Model), 50 m raster"
+        source: "BGS Superficial Deposits Thickness Model v8 - TAM (Terrain Adjusted Model), 50 m raster"
         licence: "British Geological Survey (OGL v3) - received via ST licence"
         date_accessed: "2025/2026"
         key_field: |
-          sdtm_mean_m     — zonal-mean TAM thickness per 1 km cell [m]; 0 where no superficial deposits
-          sdtm_datadist_m — zonal-mean DataDist per 1 km cell [m]; distance to nearest borehole or mapped boundary (uncertainty indicator)
-        gridding: >
-          BGS SDTM v8 TAM raster (50 m, EPSG:27700) aggregated to 1 km grid (rasterstats zonal mean)
+          sdtm_mean_m     - zonal-mean TAM thickness per 1 km cell [m]; 0 where no superficial deposits
+          sdtm_datadist_m - zonal-mean DataDist per 1 km cell [m]; distance to nearest borehole or mapped boundary (uncertainty indicator)
+        gridding: |
+          BGS SDTM v8 TAM raster (50 m, EPSG:27700) aggregated to 1 km grid (rasterstats zonal mean).
           DataDist raster aggregated in the same way to derive a per-cell confidence weight.
           Cells with no deposits (NoData in TAM) assigned 0 m.
         scoring: |
@@ -171,11 +171,11 @@ themes:
             0 m → 4,  1 m → 5,  3 m → 8,  8 m → 10,  15 m → 8,  25 m → 4,  40 m → 2,  50 m → 1
           Score is further weighted by DataDist confidence:
             weight = 0.3 + 0.7 × max(0, 1 − DataDist / 2000)
-            — cells within 2 km of an observation: weight 0.3→1.0 (full score)
-            — cells >2 km from any observation: weight 0.3 (minimum score)
+            - cells within 2 km of an observation: weight 0.3→1.0 (full score)
+            - cells >2 km from any observation: weight 0.3 (minimum score)
         notes: >
           Upgraded from BGS SDTM v5 1 km hex GeoPackage (field BSTM_MEAN) to SDTM v8 TAM 50 m raster.
-          RHEM layer (rockhead elevation mOD) also available — potential future use as depth-to-rockhead input.
+          RHEM layer (rockhead elevation mOD) also available - potential future use as depth-to-rockhead input.
           Disabled automatically for Borehole / ASR method.
 
       - name: "Topography / Slope  [infiltration]"
@@ -212,16 +212,31 @@ themes:
 
       - name: "Surface Geology  [infiltration]"
         sidebar_slider: "2.5  Surface Geology  [infiltration]"
-        status: placeholder
-        source: "BGS DiGMapGB 625K - Superficial / Bedrock Geology"
+        status: active
+        source: "BGS Geology 50K V9 — Superficial Deposits (gb_50k_superficial_V9.shp)"
         licence: "British Geological Survey (OGL v3)"
-        date_accessed: "2024"
-        key_field: "Lithology / permeability classification"
+        date_accessed: "2025"
+        key_field: "RCS_D — rock/lithology classification of superficial deposit"
         gridding: >
-          Dominant lithology polygon per 1 km cell mapped to permeability class.
-          Highly permeable superficial deposits (sands, gravels) score highest.
-        scoring: "Lithology → permeability class → 0–10. Mapping TBC."
-        notes: "Placeholder dummy values used. Disabled for Borehole/ASR."
+          Area-weighted mean of surf_perm_score (RCS_D → permeability) across all
+          superficial deposit polygons intersecting each 1 km cell.
+          Cells with no mapped superficial deposits receive score 0 (bedrock at surface).
+        scoring: |
+          RCS_D mapped to permeability score (1–10):
+            Sand and gravel / Gravel           → 10   (clean permeable; ideal MAR medium)
+            Sand                               →  8
+            Sand and silt / Silt and gravel    →  6
+            Mixed (clay-silt-sand-gravel)      →  5   (various mixed RCS_D values)
+            Clay-silt-sand / Diamicton+gravel  →  4
+            Boulders / Rock fragments          →  4
+            Diamicton / Clay and silt          →  2   (poorly permeable glacial till)
+            Clay / Peat / Shell clay           →  1   (impermeable)
+          Area-weighted mean across cell gives partial credit where permeable
+          deposits cover only part of the cell.
+        notes: >
+          Upgraded from BGS 625K placeholder to BGS Geology 50K V9 (12× finer resolution).
+          Score 0 (no deposits) is distinct from Score 1 (impermeable deposits present).
+          Disabled automatically for Borehole / ASR method.
 
 
   - label: "Supply - Water Availability"

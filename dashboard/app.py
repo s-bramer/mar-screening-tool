@@ -342,13 +342,16 @@ def _load_all() -> dict:
     ).round(1)
     cells["depth_water_m"] = depth_m.round(1)
 
-    sg_base = np.interp(
-        cells["sdtm_mean_m"].fillna(0).values,
-        [0, 0.5, 2, 6, 15, 30], [4, 6, 10, 9, 6, 3],
-    )
-    cells["surf_geo_score"] = np.clip(
-        sg_base + 1.2 * rng.standard_normal(n), 1.0, 10.0
-    ).round(1)
+    if "surf_geo_score" not in cells.columns:
+        # Fallback dummy until preprocess.py is rerun with BGS 50K surface geology
+        sg_base = np.interp(
+            cells["sdtm_mean_m"].fillna(0).values,
+            [0, 0.5, 2, 6, 15, 30], [4, 6, 10, 9, 6, 3],
+        )
+        cells["surf_geo_score"] = np.clip(
+            sg_base + 1.2 * rng.standard_normal(n), 1.0, 10.0
+        ).round(1)
+        log.warning("surf_geo_score not in hover_base.csv — using dummy. Rerun preprocess.py.")
 
     bnd  = _gpkg("boundary_3857")
     gwmu = _gpkg("gwmu_3857")
@@ -542,7 +545,7 @@ w_depth_water = pn.widgets.FloatSlider(
     stylesheets=_ph, margin=(5, 10, 5, 10))
 w_surf_geo    = pn.widgets.FloatSlider(
     name="2.5  Surface Geology  [infiltration]",    value=0.10, start=0, end=1, step=0.01,
-    stylesheets=_ph, margin=(5, 10, 5, 10))
+    stylesheets=_ac, margin=(5, 10, 5, 10))
 
 # ── Water Availability sub-criteria (dummy - data pending) ────────────────
 w_water_storm  = pn.widgets.FloatSlider(
@@ -621,7 +624,7 @@ colour_by = pn.widgets.Select(
         "SDTM Thickness":                    "sdtm_score",
         "Topography / Slope (dummy)":        "slope_score",
         "Depth to Water (dummy)":            "depth_water_score",
-        "Surface Geology (dummy)":           "surf_geo_score",
+        "Surface Geology":                   "surf_geo_score",
     },
 )
 
@@ -1146,6 +1149,143 @@ else:
     )
 
     # -----------------------------------------------------------------------
+    # Site Query — BNG coordinate lookup + CSV export
+    # -----------------------------------------------------------------------
+
+    _bng_to_wm3857 = Transformer.from_crs(27700, 3857, always_xy=True)
+
+    _sq_name  = pn.widgets.TextInput(
+        name="Site Name", placeholder="e.g. Norton ASR", width=160)
+    _sq_east  = pn.widgets.IntInput(
+        name="Easting (BNG)", value=389900, step=100, width=130,
+        description="BNG Easting — e.g. Norton: 389900, Abbey Green: 397953")
+    _sq_north = pn.widgets.IntInput(
+        name="Northing (BNG)", value=281700, step=100, width=130,
+        description="BNG Northing — e.g. Norton: 281700, Abbey Green: 357680")
+    _sq_btn   = pn.widgets.Button(
+        name="Query", button_type="primary", width=80, align="end")
+    _sq_clear = pn.widgets.Button(
+        name="Clear", button_type="light", width=80, align="end")
+
+    _sq_sites      = []
+    _sq_status     = pn.pane.Markdown("", margin=(4, 0))
+    _sq_table_pane = pn.pane.DataFrame(
+        pd.DataFrame(), sizing_mode="stretch_width", max_rows=30)
+
+    def _sq_lookup(event=None):
+        east  = _sq_east.value
+        north = _sq_north.value
+        name  = (_sq_name.value or "").strip() or f"E{east} N{north}"
+        wm_x, wm_y = _bng_to_wm3857.transform(east, north)
+        mask = (
+            (CELLS["x0"] <= wm_x) & (wm_x <= CELLS["x1"]) &
+            (CELLS["y0"] <= wm_y) & (wm_y <= CELLS["y1"])
+        )
+        if not mask.any():
+            _sq_status.object = (
+                f"⚠ No cell found for E{east} N{north}. "
+                "Check coordinates fall within the study area."
+            )
+            return
+        row = CELLS[mask].iloc[0]
+        excl = int(row.get("constraint", 1)) == 0
+        rec = {
+            "Site":              name,
+            "Easting":           east,
+            "Northing":          north,
+            "Aquifer":           row.get("aquifer", "?"),
+            "geo_score (2.1)":   round(float(row.get("geo_score",      0)), 1),
+            "sdtm_score (2.2)":  round(float(row.get("sdtm_score",     0)), 1),
+            "sdtm_m":            round(float(row.get("sdtm_mean_m",    0)), 1),
+            "surf_geo (2.5)":    round(float(row.get("surf_geo_score", 0)), 1),
+            "need_score":        round(float(row.get("need_score",     0)), 1),
+            "water_score":       round(float(row.get("water_score",    0)), 1),
+            "GWMU":              row.get("gwmu", "?"),
+            "GWM":               row.get("gwm_name", "?"),
+            "Constraint":        "Excluded" if excl else "Feasible",
+            "c_nonprod":         "No" if int(row.get("c_nonprod", 1)) == 0 else "Yes",
+            "c_gwdte":           "No" if int(row.get("c_gwdte",   1)) == 0 else "Yes",
+        }
+        _sq_sites.append(rec)
+        _sq_table_pane.object = pd.DataFrame(_sq_sites)
+        flag = "🔴 **Excluded**" if excl else "🟢 **Feasible**"
+        _sq_status.object = (
+            f"{flag} &nbsp;|&nbsp; **{name}** &nbsp;|&nbsp; "
+            f"Aquifer: {rec['Aquifer']} &nbsp;|&nbsp; "
+            f"geo: {rec['geo_score (2.1)']} &nbsp; "
+            f"sdtm: {rec['sdtm_score (2.2)']} &nbsp; "
+            f"surf_geo: {rec['surf_geo (2.5)']}"
+        )
+
+    def _sq_clear_all(event=None):
+        _sq_sites.clear()
+        _sq_table_pane.object = pd.DataFrame()
+        _sq_status.object = ""
+
+    _sq_btn.on_click(_sq_lookup)
+    _sq_clear.on_click(_sq_clear_all)
+
+    def _sq_csv():
+        import io
+        buf = io.StringIO()
+        if _sq_sites:
+            pd.DataFrame(_sq_sites).to_csv(buf, index=False)
+        else:
+            buf.write("name,easting,northing\n(no sites queried)\n")
+        buf.seek(0)
+        return buf
+
+    def _all_cells_csv():
+        import io
+        buf = io.StringIO()
+        CELLS.to_csv(buf, index=False)
+        buf.seek(0)
+        return buf
+
+    _sq_export = pn.widgets.FileDownload(
+        callback=_sq_csv,
+        filename="MAR_ST_site_query.csv",
+        button_type="success",
+        label="Export queried sites (CSV)",
+        width=210,
+    )
+    _all_export = pn.widgets.FileDownload(
+        callback=_all_cells_csv,
+        filename="MAR_ST_all_cells.csv",
+        button_type="default",
+        label="Export all cells (CSV)",
+        width=210,
+    )
+
+    _site_query_tab = pn.Column(
+        pn.pane.Markdown(
+            "## Site Validation Query\n"
+            "Enter British National Grid (BNG) coordinates to look up the tool's current "
+            "scoring for any location within the study area. Multiple sites can be queried "
+            "and compared side-by-side. Scores shown reflect the active preprocessing run; "
+            "**active criteria: 2.1 Aquifer, 2.2 SDTM, 2.5 Surface Geology**. "
+            "Need and Water scores are currently dummies.",
+            margin=(10, 15, 6, 15),
+        ),
+        pn.Row(
+            _sq_name, _sq_east, _sq_north, _sq_btn, _sq_clear,
+            align="end", margin=(4, 10),
+        ),
+        _sq_status,
+        _sq_table_pane,
+        pn.layout.Divider(margin=(12, 0)),
+        pn.pane.Markdown("### Export", margin=(4, 15, 2, 15)),
+        pn.pane.Markdown(
+            "_Site query CSV contains only the rows queried above. "
+            "All-cells CSV exports the full `hover_base.csv` columns for every grid cell._",
+            styles=_hint, margin=(0, 15, 6, 15),
+        ),
+        pn.Row(_sq_export, _all_export, margin=(4, 10)),
+        sizing_mode="stretch_both",
+        scroll=True,
+    )
+
+    # -----------------------------------------------------------------------
     # Sidebar assembly
     # -----------------------------------------------------------------------
 
@@ -1295,9 +1435,10 @@ else:
 
         pn.pane.Markdown(
             "⚠ **Placeholder data:** Need for MAR, Water Availability, "
-            "Topography/Slope, Depth to Water, Surface Geology, and all "
-            "Need / Water sub-criteria scores are spatially coherent dummies. "
-            "Aquifer Classification and SDTM Thickness use real BGS data.",
+            "Topography/Slope, and Depth to Water scores are spatially coherent dummies. "
+            "All Need / Water sub-criteria scores are also dummies. "
+            "Real BGS data: Aquifer Classification (2.1), SDTM Thickness (2.2), "
+            "Surface Geology (2.5).",
             styles=_warn,
         ),
         width=SIDEBAR_W,
@@ -1306,6 +1447,7 @@ else:
     main_content = pn.Tabs(
         ("Suitability Map",   pn.Column(map_pane,           sizing_mode="stretch_both")),
         ("MAR Decision Tree", pn.Column(sankey_pane,        sizing_mode="stretch_both")),
+        ("Site Query",        _site_query_tab),
         ("Data Sources",      pn.Column(_data_sources_tab,  sizing_mode="stretch_both",
                                         scroll=True)),
         sizing_mode="stretch_both",

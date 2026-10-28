@@ -14,6 +14,7 @@ Outputs (written to processed/):
 Grid score columns:
   geo_score       — bedrock aquifer productivity (BGS 625K hydrogeology)
   sdtm_score      — superficial deposit infiltration suitability (BGS SDTM v8 TAM 50m)
+  surf_geo_score  — surface geology permeability (BGS Geology 50K V9, RCS_D)
   abs_risk_score  — GW abstractions at risk / 1.3 (EA WRGIS)
   need_score      — need for MAR (dummy placeholder; will be replaced by sub-criteria composite)
   water_score     — water availability (dummy placeholder)
@@ -43,7 +44,7 @@ from mar_st.ingest import (
     load_gwmu, load_sw_catchments, load_rivers, load_layer,
     dominant_value_join, area_weighted_join,
     dummy_need_score, dummy_water_score,
-    load_sdtm_rasters,
+    load_sdtm_rasters, load_superficial_geology_50k,
 )
 from mar_st.mce import apply_constraints, weighted_sum, score_sdtm
 from mar_st.utils import get_logger
@@ -214,6 +215,18 @@ def run():
     grid = load_sdtm_rasters(cfg, grid)
 
     # ------------------------------------------------------------------
+    # 5b. Surface Geology — BGS Geology 50K V9 (RCS_D permeability score)
+    # ------------------------------------------------------------------
+    log.info("=== Surface Geology (BGS 50K V9) ===")
+    surf50k = load_superficial_geology_50k(cfg, boundary)
+    grid = area_weighted_join(
+        grid, surf50k,
+        value_cols=["surf_perm_score"],
+        output_cols=["surf_geo_score"],
+        fill_value=0.0,
+    )
+
+    # ------------------------------------------------------------------
     # 5. Constraints mask (non-productive aquifer + GWDTEs)
     # ------------------------------------------------------------------
     log.info("=== Constraints ===")
@@ -352,6 +365,7 @@ def run():
         "sdtm_score":        grid["sdtm_score"].round(1).values,
         "sdtm_mean_m":       grid["sdtm_mean_m"].round(1).values,
         "sdtm_datadist_m":   grid["sdtm_datadist_m"].round(0).astype(int).values,
+        "surf_geo_score":    grid["surf_geo_score"].round(1).values,
         "aquifer":        grid["hydro_character"].values,
         "gwmu":           grid["gwmu_name"].values,
         "gwm_name":       grid["gwm_name"].values,

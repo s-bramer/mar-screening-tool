@@ -65,6 +65,10 @@ data_sources:
     nodata: -999
     label: "Superficial Deposits Thickness Model (BGS SDTM v8 — TAM 50 m)"
 
+  superficial_geology_50k:
+    path: data/BGS/Geology_50_V9/Data/gb_50k_superficial_V9.shp
+    label: "Superficial Geology (BGS Geology 50K V9)"
+
   gwm:
     path: data/GWMs/gmw_boundaries.shp
     label: "Regional Groundwater Model Boundaries"
@@ -92,6 +96,40 @@ sdtm_scoring:
   breakpoints_m:  [0,  1,  3,  8, 15, 25, 40, 50]
   scores:         [4,  5,  8, 10,  8,  4,  2,  1]
   datadist_max_m: 2000   # cells beyond this distance get minimum confidence weight (0.3)
+
+# ---------------------------------------------------------------------------
+# Scoring — Surface Geology Permeability (BGS Geology 50K V9, RCS_D field)
+# ---------------------------------------------------------------------------
+# Maps RCS_D (rock/lithology class) → infiltration permeability score (1–10).
+# Used for criterion 2.5 Surface Geology [infiltration].
+# Rationale: clean sands and gravels are the best medium for infiltration MAR;
+# clays and peat are effectively impermeable and score 1.
+# default_score applied to any RCS_D value not listed (conservative).
+surf_geo_scoring:
+  default_score: 3
+  permeability_class:
+    "Sand and gravel":                                         10
+    "Gravel":                                                  10
+    "Sand":                                                     8
+    "Sand and silt":                                            6
+    "Silt and gravel":                                          6
+    "Clay, silt, sand and gravel":                              5
+    "Clay, sand and gravel":                                    5
+    "Sand, gravel, clay and silt":                              5
+    "Gravel, sand, silt and clay":                              5
+    "Sand with clay and gravel":                                5
+    "Clay, silt and sand":                                      4
+    "Diamicton, sand and gravel":                               4
+    "Boulders":                                                 4
+    "Rock fragments, angular, undifferentiated source rock":    4
+    "Calcareous tufa":                                          4
+    "Sediment":                                                 3
+    "Diamicton":                                                2
+    "Clay and silt":                                            2
+    "Silty clay":                                               2
+    "Peat":                                                     1
+    "Shell clay":                                               1
+    "Clay":                                                     1
 
 # ---------------------------------------------------------------------------
 # Scoring — Geological Suitability (hydrogeology)

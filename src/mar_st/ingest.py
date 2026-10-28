@@ -195,6 +195,33 @@ def load_sdtm_rasters(cfg: dict, grid: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
     return grid
 
 
+def load_superficial_geology_50k(cfg: dict, boundary: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
+    """
+    Load BGS Geology 50K V9 superficial deposits and assign infiltration
+    permeability score from the RCS_D (rock/lithology class) field.
+
+    Returns GeoDataFrame with column surf_perm_score (1–10).
+    Area-weighted join to the 1 km grid is done in preprocess.py.
+    """
+    src_cfg = cfg["data_sources"]["superficial_geology_50k"]
+    gdf = load_layer(src_cfg["path"])
+    gdf = clip_to_boundary(gdf, boundary)
+
+    score_map  = cfg["surf_geo_scoring"]["permeability_class"]
+    default_sc = cfg["surf_geo_scoring"].get("default_score", 3)
+    gdf["surf_perm_score"] = gdf["RCS_D"].map(score_map).fillna(default_sc).astype(float)
+
+    unmapped = gdf[gdf["RCS_D"].map(score_map).isna()]["RCS_D"].unique()
+    if len(unmapped):
+        log.warning(f"Surface geology: {len(unmapped)} unmapped RCS_D value(s) → default {default_sc}: {unmapped}")
+
+    log.info(
+        f"Surface geology 50K: {len(gdf):,} polygons, "
+        f"surf_perm_score {gdf['surf_perm_score'].min():.0f}–{gdf['surf_perm_score'].max():.0f}"
+    )
+    return gdf
+
+
 def load_rivers(cfg: dict, boundary: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
     src_cfg = cfg["data_sources"]["os_rivers"]
     gdf = load_layer(src_cfg["path"], assumed_epsg=src_cfg.get("assumed_crs", 27700))

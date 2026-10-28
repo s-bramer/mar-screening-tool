@@ -30,7 +30,7 @@ MAR-ST computes multiple spatial datasets, applies a weighted **Multi-Criteria E
 
 - **1 km suitability grid** — ~18,700 cells scored across three MCE themes; composite score updates live with weight sliders
 - **Numbered sub-criteria system** — sub-criteria across three themes with weight sliders 
-- **Real BGS data** — hydrogeology classification (2.1) and SDTM deposit thickness (2.2) fully processed and scored
+- **Real BGS data** — hydrogeology classification (2.1), SDTM deposit thickness (2.2), and surface geology permeability (2.5) fully processed and scored
 - **Hard constraints** — non-productive aquifer cells and GWDTEs excluded automatically; excluded cells rendered in red
 - **MAR Decision Tree** — Sankey diagram mapping MAR Objectives → Water Sources → Recharge Methods with path highlighting
 - **Data Sources tab** — live documentation of all input datasets, scoring methodology, licence and status; driven by `data_sources.yaml` 
@@ -103,7 +103,8 @@ Place source files under `data/` following the paths defined in `config.yaml`. T
 | Study boundary | `data/shapes/ST_catchment_area.shp` | Client-supplied |
 | BGS Hydrogeology 625K | `data/BGS/BGS_Hydrogeology_625k/` | BGS Open Geoscience |
 | BGS Geology 625K | `data/BGS/BGS_Geology_625k_Shapefile/` | BGS Open Geoscience |
-| BGS SDTM 1km | `data/BGS/Superficial_Deposits_Thickness/` | BGS Open Geoscience |
+| BGS Geology 50K V9 | `data/BGS/Geology_50_V9/Data/` | BGS Open Geoscience |
+| BGS SDTM v8 | `data/BGS/Superficial_Deposit_Thickness_Model/Data/` | BGS Open Geoscience |
 | EA GWMUs | `data/EA/Groundwater_Management_Units.shp` | EA Open Data |
 | EA WFD Catchments | `data/EA/WFD_Surface_Water_Management_Catchments_Cycle_2.shp` | EA Open Data |
 | EA GWDTEs | `data/EA/England_only_GWDTEs.shp` | EA Open Data |
@@ -148,10 +149,10 @@ Composite suitability is a weighted linear combination of three themes, each dec
 | 1.4 | CAMS Ledger Deficit [AWB] | EA WRGIS CAMS APs | Placeholder |
 | 1.5 | CSO / WwTW Proximity [DWMP] | ST SOAP / DWMP | Placeholder |
 | 2.1 | Aquifer Classification | BGS Hydrogeology 625K | **Active** |
-| 2.2 | SDTM Thickness [infiltration] | BGS SDTM 1 km | **Active** |
+| 2.2 | SDTM Thickness [infiltration] | BGS SDTM v8 TAM 50 m | **Active** |
 | 2.3 | Topography / Slope [infiltration] | EA LiDAR DTM 10 m | Placeholder — data received |
 | 2.4 | Depth to Water | EA groundwater models | Placeholder |
-| 2.5 | Surface Geology [infiltration] | BGS DiGMapGB 625K | Placeholder |
+| 2.5 | Surface Geology [infiltration] | BGS Geology 50K V9 | **Active** |
 | 3.1 | Storm Water at Network Points [DWMP] | ST network data | Placeholder |
 | 3.2 | Drinking Water Availability | ST supply network mains | Placeholder — data received |
 | 3.3 | Treated Waste Water [WwTW proximity] | EA discharge consents | Placeholder |
@@ -175,7 +176,7 @@ All parameters in `config.yaml`. Key sections:
 
 ## Known Limitations
 
-1. **11 of 13 sub-criteria use placeholder scores** — flagged red in the sidebar; real data processing ongoing
+1. **10 of 13 sub-criteria use placeholder scores** — flagged red in the sidebar; real data processing ongoing
 2. **Sub-criteria sliders are cosmetic** — weights shown per criterion but the composite currently uses theme-level weights only; sub-criteria weighting not yet wired into scoring
 3. **Dominant-polygon rule** — where multiple geology polygons overlap a 1 km cell, the largest fragment wins; area-weighted mean can be introduced later
 4. **MAR Objective selector** — UI control and Sankey exist but the selector does not yet filter the suitability scoring; it informs the display only
